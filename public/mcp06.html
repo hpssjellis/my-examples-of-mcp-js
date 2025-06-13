@@ -3,200 +3,464 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Agent Coordinator (MCP Server)</title>
+    <title>My LLM Agent Client</title>
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f0f0f0; color: #333; }
-        .my-main-container { max-width: 900px; margin: 0 auto; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .my-panel { background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-width: 600px; margin: 0 auto; }
         h1, h2, h3 { margin-top: 0; margin-bottom: 15px; }
-        .my-log-box, .my-client-list-box { border: 1px solid #eee; background-color: #fafafa; padding: 10px; height: 250px; overflow-y: auto; margin-bottom: 15px; border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; word-break: break-word; }
-        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; }
-        button:hover { background-color: #0056b3; }
-        .my-client-item { margin-bottom: 5px; }
-        .my-client-item strong { color: #0056b3; }
+        .my-log-box, .my-conversation-box { border: 1px solid #eee; background-color: #fafafa; padding: 10px; height: 180px; overflow-y: auto; margin-bottom: 15px; border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; word-break: break-word; }
+        input[type="text"] { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 15px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; }
+        button:hover { background-color: #218838; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        .my-message { margin-bottom: 5px; }
+        .my-message .my-sender { font-weight: bold; }
+        .my-system-message { color: #888; font-style: italic; }
+        .my-agent-thought { color: #555; font-style: italic; }
+        .my-tool-call { color: #b300b3; font-weight: bold; }
+        .my-tool-result { color: #009900; }
+        .my-sensor-data { color: #ff6600; font-weight: bold; }
+        .my-connect-button-serial { background-color: #8A2BE2; } /* Purple for serial */
+        .my-connect-button-serial:hover { background-color: #6A1EB2; }
     </style>
 </head>
 <body>
-    <div class="my-main-container">
-        <h2>Model Context Protocol (MCP Server) for client-side AI- Agents</h2>
-        <p>Note: This is a simulated coordinator using Browser's BroadcastChannel. Each "LLM Agent" will run in a separate tab. For truly distributed agents across different computers, a Node.js WebSocket server would be required.</p>
-        <button id="my-spawn-client-button">Spawn New LLM Agent Client Tab</button>
+    <div class="my-panel">
+        <h2 id="my-client-title">My LLM Agent (Not Connected)</h2>
 
-        <h3>My Connected Agents (<span id="my-connected-clients-count">0</span>)</h3>
-        <div id="my-client-list" class="my-client-list-box">
-            <p style="color: gray; font-style: italic;">No agents connected yet.</p>
+        <!-- My Connection Section -->
+        <div id="my-connection-section">
+            <h3>Connect to Coordinator</h3>
+            <input type="text" id="my-client-name-input" placeholder="Enter agent name">
+            <button id="my-connect-button">Connect</button>
         </div>
-        <h3>My Coordinator Logs</h3>
-        <div id="my-server-logs" class="my-log-box"></div>
+
+        <!-- My Microcontroller Connection Section -->
+        <div id="my-microcontroller-section" style="margin-top: 20px;">
+            <h3>My Microcontroller Connection</h3>
+            <button id="my-connect-serial-button" class="my-connect-button-serial">Connect to Microcontroller (WebSerial)</button>
+            <p id="my-serial-status" style="font-size: 0.9em; color: gray; margin-top: 5px;">Status: Disconnected</p>
+            <button id="my-send-serial-command-button" style="margin-top: 10px; display: none;">Send Mock Command</button>
+        </div>
+
+        <!-- My Conversation Section -->
+        <div id="my-conversation-section" style="display: none; margin-top: 20px;">
+            <h3>My Conversation</h3>
+            <div id="my-client-conversation-div" class="my-conversation-box"></div>
+            <input type="text" id="my-query-input" placeholder="Type your query for the agent">
+            <button id="my-send-query-button">Send Query to Coordinator</button>
+        </div>
+
+        <!-- My Agent Logs -->
+        <h3>My Agent Logs</h3>
+        <div id="my-client-logs" class="my-log-box"></div>
     </div>
 
     <script type="module">
         // --- My Global Constants ---
         const MY_CHANNEL_NAME = 'my_mcp_channel';
 
-        // --- My Agent Coordinator Logic ---
-        class MyAgentCoordinator {
-            myClients = new Map(); // agentId -> { id, name, status }
-            myLogs = [];
-            myLogListeners = [];
-            myClientUpdateListeners = [];
+        // --- My Client-side Logic (LLM Agent) ---
+        class MyLLM_Agent {
+            myClientId;
+            myClientName = null;
+            myIsConnected = false;
             myBroadcastChannel;
+            myLogs = [];
+            myConversationHistory = [];
+            myLogListeners = [];
+            myConversationListeners = [];
+            myUiElements;
 
-            constructor() {
-                this.myAddLog('My Agent Coordinator started (simulated, awaiting agent connections).');
+            // My WebSerial variables
+            mySerialPort = null;
+            mySerialReader = null;
+            mySerialWriter = null;
+            mySerialConnected = false;
+
+            // My LLM API configuration (Conceptual for local browser LLM)
+            // In a real scenario, this would load a WASM model or fetch from a local API
+            myLLMApiKey = ""; // Use your actual key if calling an external LLM
+            myLLMEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.myLLMApiKey}`;
+            myChuckNorrisJokeAPI = `https://api.chucknorris.io/jokes/random`;
+
+
+            constructor(myUiElements) {
+                this.myUiElements = myUiElements;
+                this.myClientId = `agent-${Math.random().toString(36).substring(2, 9)}`;
+                this.myAddLog(`My Agent instance created with ID: ${this.myClientId}`);
 
                 this.myBroadcastChannel = new BroadcastChannel(MY_CHANNEL_NAME);
-                this.myBroadcastChannel.onmessage = this.myHandleIncomingMessage.bind(this);
+                this.myBroadcastChannel.onmessage = this.myReceiveMessage.bind(this);
 
-                // Add a listener for when the coordinator page is closed or reloaded
+                // Send a disconnect message when the tab is closed or reloaded
                 window.addEventListener('beforeunload', () => {
-                    this.myBroadcastMessageToClients('COORDINATOR_SHUTDOWN', { reason: 'Coordinator tab closing or reloading.' });
-                    this.myAddLog('My Coordinator is shutting down. Notifying agents.');
-                    this.myBroadcastChannel.close(); // Close the channel
+                    if (this.myIsConnected) {
+                        this.mySendMessageToCoordinator('AGENT_DISCONNECT', {});
+                        this.myAddLog('My Agent tab closing. Notifying coordinator of disconnect.');
+                    }
+                    if (this.mySerialPort && this.mySerialPort.readable) {
+                        this.mySerialReader.cancel(); // Stop reader
+                        this.mySerialPort.close(); // Close port
+                        this.myAddLog('My Serial port closed on tab unload.');
+                    }
+                    this.myBroadcastChannel.close();
                 });
+
+                // Set up UI event listeners specific to this agent
+                this.myUiElements.myConnectButton.addEventListener('click', this.myHandleConnect.bind(this));
+                this.myUiElements.myClientNameInput.addEventListener('input', this.myUpdateUIForConnectionStatus.bind(this));
+                this.myUiElements.myClientNameInput.addEventListener('keydown', async (myEvent) => {
+                    if (myEvent.key === 'Enter') {
+                        await this.myHandleConnect();
+                    }
+                });
+
+                this.myUiElements.mySendQueryButton.addEventListener('click', this.myHandleSendQuery.bind(this));
+                this.myUiElements.myQueryInput.addEventListener('input', this.myUpdateUIForConnectionStatus.bind(this));
+                this.myUiElements.myQueryInput.addEventListener('keydown', async (myEvent) => {
+                    if (myEvent.key === 'Enter') {
+                        await this.myHandleSendQuery();
+                    }
+                });
+
+                // WebSerial button listener
+                this.myUiElements.myConnectSerialButton.addEventListener('click', this.myConnectSerial.bind(this));
+                this.myUiElements.mySendSerialCommandButton.addEventListener('click', () => {
+                    // Send a mock command to the microcontroller (e.g., 'TOGGLE_LED')
+                    this.mySendSerialCommand("TOGGLE_LED\n");
+                });
+
+                this.myUpdateUIForConnectionStatus(); // Initial UI state
             }
 
             myAddLog(myMessage) {
                 const myTimestamp = new Date().toLocaleTimeString();
-                const myLogEntry = `[${myTimestamp}] COORDINATOR: ${myMessage}`;
+                const myLogEntry = `[${myTimestamp}] AGENT (${this.myClientName || this.myClientId}): ${myMessage}`;
                 this.myLogs.push(myLogEntry);
                 this.myLogListeners.forEach(myListener => myListener(myLogEntry));
+                myAppendLog(this.myUiElements.myClientLogsDiv, myLogEntry);
             }
 
-            // Sends a message to a specific agent ID or broadcasts to all
-            mySendMessage(myTargetId, myType, myPayload) {
+            // --- My BroadcastChannel Communication ---
+            mySendMessageToCoordinator(myType, myPayload) {
                 const myMessage = {
-                    source: 'coordinator',
-                    senderId: 'coordinator',
+                    source: 'agent',
+                    senderId: this.myClientId,
                     type: myType,
-                    targetId: myTargetId,
+                    targetId: 'coordinator',
                     payload: myPayload,
                     timestamp: new Date().toISOString()
                 };
                 this.myBroadcastChannel.postMessage(myMessage);
             }
 
-            // Broadcasts a message to all connected agents
-            myBroadcastMessageToClients(myType, myPayload) {
-                this.mySendMessage('broadcast', myType, myPayload);
+            async myReceiveMessage(myEvent) {
+                const myMsg = myEvent.data;
+
+                // Only process messages from coordinator or broadcasts targeting this agent
+                if (myMsg.source === 'coordinator' && (myMsg.targetId === this.myClientId || myMsg.targetId === 'broadcast')) {
+                    this.myAddLog(`Received coordinator message (${myMsg.type}): ${JSON.stringify(myMsg.payload).substring(0, 50)}...`);
+
+                    switch (myMsg.type) {
+                        case 'COORDINATOR_ACCEPTED_CONNECTION':
+                            this.myIsConnected = true;
+                            this.myClientName = myMsg.payload.assignedName;
+                            this.myAddLog(`Connection successful! Assigned name: ${this.myClientName}`);
+                            this.myConversationHistory.push({ type: 'system', text: `You are connected as ${this.myClientName}.` });
+                            this.myUpdateConversationUI();
+                            this.myUpdateUIForConnectionStatus();
+                            break;
+
+                        case 'COORDINATOR_REJECTED_CONNECTION':
+                            this.myIsConnected = false;
+                            this.myClientName = null;
+                            this.myAddLog(`Connection rejected: ${myMsg.payload.reason}`);
+                            this.myConversationHistory.push({ type: 'system', text: `Connection rejected: ${myMsg.payload.reason}` });
+                            this.myUpdateConversationUI();
+                            this.myUpdateUIForConnectionStatus();
+                            break;
+
+                        case 'COORDINATOR_BROADCAST_MESSAGE':
+                            // Display messages from other agents or coordinator
+                            this.myConversationHistory.push({
+                                type: 'broadcast',
+                                sender: myMsg.payload.senderName,
+                                text: myMsg.payload.text,
+                                timestamp: myMsg.timestamp
+                            });
+                            this.myUpdateConversationUI();
+                            break;
+
+                        case 'COORDINATOR_DISCONNECTED_AGENT':
+                            // Only process if this agent is not the one disconnecting itself
+                            if (myMsg.payload.agentId !== this.myClientId) {
+                                this.myConversationHistory.push({ type: 'system', text: `${myMsg.payload.agentName} has left the agent swarm.` });
+                                this.myUpdateConversationUI();
+                            }
+                            break;
+
+                        case 'COORDINATOR_SHUTDOWN':
+                            if (this.myIsConnected) {
+                                this.myIsConnected = false;
+                                this.myClientName = null;
+                                this.myAddLog(`Coordinator disconnected: ${myMsg.payload.reason}`);
+                                this.myConversationHistory.push({ type: 'system', text: `Coordinator disconnected: ${myMsg.payload.reason}` });
+                                this.myUpdateConversationUI();
+                                this.myUpdateUIForConnectionStatus();
+                            }
+                            break;
+
+                        case 'COORDINATOR_ROUTING_ACK': // Acknowledge that coordinator received the query
+                             this.myAddLog(`Coordinator acknowledged query: ${myMsg.payload.status}`);
+                             // Agent can now proceed with LLM call, or tool call based on query
+                             const myQueryToProcess = this.myUiElements.myQueryInput.value.trim(); // Get the last query sent
+                             if (myQueryToProcess) {
+                                 // Check for specific queries that trigger tools
+                                 if (myQueryToProcess.toLowerCase() === "tell me a joke") {
+                                     const myJokeResult = await this.myFetchJoke();
+                                     await this.mySendMessageToCoordinator('TOOL_RESULT', { toolName: 'chuck_norris_joke', result: myJokeResult });
+                                     const myAgentResponse = `Here's a joke for you: ${myJokeResult}`;
+                                     await this.mySendMessageToCoordinator('AGENT_RESPONSE', { response: myAgentResponse });
+                                     this.myConversationHistory.push({ type: 'agent_response', response: myAgentResponse, timestamp: new Date().toISOString() });
+                                     this.myUpdateConversationUI();
+                                 } else {
+                                     // Default to LLM call for other queries
+                                     const myLLMResponse = await this.myCallLLM(myQueryToProcess);
+                                     await this.mySendMessageToCoordinator('AGENT_RESPONSE', { response: myLLMResponse });
+                                     this.myConversationHistory.push({ type: 'agent_response', response: myLLMResponse, timestamp: new Date().toISOString() });
+                                     this.myUpdateConversationUI();
+                                 }
+                             }
+                            break;
+
+                        default:
+                            this.myAddLog(`Unhandled coordinator message type: ${myMsg.type}`);
+                            break;
+                    }
+                }
             }
 
-            async myHandleIncomingMessage(myEvent) {
-                const myMsg = myEvent.data;
-                if (myMsg.source !== 'agent') {
-                    // Ignore messages not from agents
+            // --- My UI Interaction Logic ---
+            async myHandleConnect() {
+                const myName = this.myUiElements.myClientNameInput.value.trim();
+                if (myName) {
+                    this.myAddLog(`Attempting to connect as "${myName}"...`);
+                    this.mySendMessageToCoordinator('AGENT_CONNECT', { requestedName: myName });
+                }
+            }
+
+            async myHandleSendQuery() {
+                const myQuery = this.myUiElements.myQueryInput.value.trim();
+                if (myQuery) {
+                    // This agent sends a user query to the coordinator
+                    this.mySendMessageToCoordinator('USER_QUERY', { query: myQuery });
+                    this.myConversationHistory.push({ sender: this.myClientName, text: `You (Agent): "${myQuery}"`, type: 'user_query' });
+                    this.myUpdateConversationUI();
+                    this.myUiElements.myQueryInput.value = '';
+                }
+                this.myUpdateUIForConnectionStatus(); // Re-evaluate disabled state for send button
+            }
+
+            myUpdateUIForConnectionStatus() {
+                this.myUiElements.myClientTitle.textContent = this.myIsConnected ? `My LLM Agent (${this.myClientName})` : `My LLM Agent (Not Connected)`;
+                this.myUiElements.myConnectionSection.style.display = this.myIsConnected ? 'none' : 'block';
+                this.myUiElements.myConversationSection.style.display = this.myIsConnected ? 'block' : 'none';
+
+                this.myUiElements.myClientNameInput.disabled = this.myIsConnected;
+                this.myUiElements.myConnectButton.disabled = this.myIsConnected || !this.myUiElements.myClientNameInput.value.trim();
+                this.myUiElements.mySendQueryButton.disabled = !this.myIsConnected || !this.myUiElements.myQueryInput.value.trim();
+
+                // Update WebSerial button status
+                this.myUiElements.myConnectSerialButton.disabled = this.mySerialConnected;
+                this.myUiElements.mySerialStatus.textContent = this.mySerialConnected ? "Status: Connected" : "Status: Disconnected";
+                this.myUiElements.mySendSerialCommandButton.style.display = this.mySerialConnected ? 'block' : 'none';
+            }
+
+            myUpdateConversationUI() {
+                this.myUiElements.myClientConversationDiv.innerHTML = '';
+                this.myConversationHistory.forEach(myMsg => {
+                    const myP = document.createElement('p');
+                    myP.classList.add('my-message');
+                    const myTimestampStr = new Date(myMsg.timestamp || Date.now()).toLocaleTimeString();
+
+                    switch (myMsg.type) {
+                        case 'system':
+                            myP.classList.add('my-system-message');
+                            myP.textContent = myMsg.text;
+                            break;
+                        case 'user_query':
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> ${myMsg.text} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'broadcast':
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> ${myMsg.text} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'thought':
+                            myP.classList.add('my-agent-thought');
+                            myP.innerHTML = `<em>Agent Thought: ${myMsg.text}</em> <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'tool_call':
+                            myP.classList.add('my-tool-call');
+                            myP.innerHTML = `<strong>Tool Call: ${myMsg.toolName}(${myMsg.parameters})</strong> <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'tool_result':
+                            myP.classList.add('my-tool-result');
+                            myP.innerHTML = `<em>Tool Result (${myMsg.toolName}): ${myMsg.result}</em> <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'agent_response':
+                            myP.innerHTML = `<span class="my-sender">Agent Final Response:</span> ${myMsg.response} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'SENSOR_DATA':
+                            myP.classList.add('my-sensor-data');
+                            myP.innerHTML = `<strong>SENSOR DATA from Microcontroller:</strong> ${myMsg.payload.value} (${myMsg.payload.type}) <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        default:
+                            myP.textContent = JSON.stringify(myMsg);
+                            break;
+                    }
+                    this.myUiElements.myClientConversationDiv.appendChild(myP);
+                });
+                this.myUiElements.myClientConversationDiv.scrollTop = this.myUiElements.myClientConversationDiv.scrollHeight;
+            }
+
+            // --- My WebSerial Integration (Conceptual) ---
+            async myConnectSerial() {
+                if (!('serial' in navigator)) {
+                    this.myAddLog("Web Serial API not supported in this browser. Please use Chrome/Edge.");
                     return;
                 }
+                try {
+                    this.myAddLog("Attempting to connect to serial port...");
+                    this.mySerialPort = await navigator.serial.requestPort();
+                    await this.mySerialPort.open({ baudRate: 9600 }); // Adjust baudRate as needed
 
-                this.myAddLog(`Received message from agent ${myMsg.senderId} (${myMsg.type})`);
+                    const myTextEncoder = new TextEncoderStream();
+                    const myWritableStreamClosed = this.mySerialPort.writable.pipeTo(myTextEncoder.writable);
+                    this.mySerialWriter = myTextEncoder.writable.getWriter();
 
-                switch (myMsg.type) {
-                    case 'AGENT_CONNECT':
-                        const myRequestedName = myMsg.payload.requestedName;
-                        const myAgentNameTaken = Array.from(this.myClients.values()).some(myC => myC.name === myRequestedName);
+                    const myTextDecoder = new TextDecoderStream();
+                    const myReadableStreamClosed = this.mySerialPort.readable.pipeTo(myTextDecoder.writable);
+                    this.mySerialReader = myTextDecoder.readable.getReader();
 
-                        if (myAgentNameTaken) {
-                            this.myAddLog(`Connection rejected for ${myMsg.senderId}: Name "${myRequestedName}" is already taken.`);
-                            this.mySendMessage(myMsg.senderId, 'COORDINATOR_REJECTED_CONNECTION', { reason: `Name "${myRequestedName}" is already taken.` });
-                        } else {
-                            const myNewClient = {
-                                id: myMsg.senderId,
-                                name: myRequestedName || myMsg.senderId,
-                                status: 'connected'
-                            };
-                            this.myClients.set(myMsg.senderId, myNewClient);
-                            this.myAddLog(`Agent ${myNewClient.id} (${myNewClient.name}) connected.`);
-                            this.mySendMessage(myMsg.senderId, 'COORDINATOR_ACCEPTED_CONNECTION', { assignedName: myNewClient.name });
-                            this.myUpdateClientListAndNotify();
-                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: 'Coordinator', text: `${myNewClient.name} has joined the agent swarm.` });
-                        }
-                        break;
+                    this.mySerialConnected = true;
+                    this.myAddLog("Serial port connected. Starting to read data...");
+                    this.myUpdateUIForConnectionStatus();
+                    this.myReadSerialData(); // Start listening for incoming data
 
-                    case 'USER_QUERY':
-                        // Simulate routing a user query. In a real system, you'd route to a specific agent
-                        // or initiate a complex multi-agent workflow.
-                        const myQueryText = myMsg.payload.query;
-                        const mySendingAgent = this.myClients.get(myMsg.senderId);
-                        this.myAddLog(`User Query from ${mySendingAgent ? mySendingAgent.name : myMsg.senderId}: "${myQueryText}"`);
+                    // Example: Send an initial command to the microcontroller
+                    await this.mySendSerialCommand("HELLO_MCU\n");
 
-                        // Example: Route to a specific agent if it exists
-                        // if (this.myClients.has('specific-agent-id')) {
-                        //     this.mySendMessage('specific-agent-id', 'PROCESS_QUERY', { query: myQueryText });
-                        // } else {
-                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
-                                senderName: mySendingAgent ? mySendingAgent.name : 'Unknown Agent',
-                                text: `Query received: "${myQueryText}" (Coordinator routing...)`
-                            });
-                            // Simply echoing back for demonstration
-                            this.mySendMessage(myMsg.senderId, 'COORDINATOR_ROUTING_ACK', { status: 'acknowledged' });
-                        // }
-                        break;
-
-                    case 'AGENT_THOUGHT':
-                    case 'TOOL_CALL':
-                    case 'TOOL_RESULT':
-                    case 'AGENT_RESPONSE':
-                    case 'SENSOR_DATA': // New message type for sensor data
-                        const myReportingAgent = this.myClients.get(myMsg.senderId);
-                        const myAgentName = myReportingAgent ? myReportingAgent.name : myMsg.senderId;
-                        this.myAddLog(`${myAgentName} (${myMsg.type}): ${JSON.stringify(myMsg.payload)}`);
-                        // For this demo, we'll just broadcast these messages for visibility
-                        this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
-                            senderName: myAgentName,
-                            text: `[${myMsg.type}]: ${JSON.stringify(myMsg.payload)}`
-                        });
-                        break;
-
-                    case 'AGENT_DISCONNECT':
-                        const myDisconnectedClientInfo = this.myClients.get(myMsg.senderId);
-                        if (myDisconnectedClientInfo) {
-                            this.myClients.delete(myMsg.senderId);
-                            this.myAddLog(`Agent ${myDisconnectedClientInfo.id} (${myDisconnectedClientInfo.name}) disconnected.`);
-                            this.myUpdateClientListAndNotify();
-                            this.myBroadcastMessageToClients('COORDINATOR_DISCONNECTED_AGENT', { agentId: myDisconnectedClientInfo.id, agentName: myDisconnectedClientInfo.name });
-                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: 'Coordinator', text: `${myDisconnectedClientInfo.name} has left the agent swarm.` });
-                        } else {
-                            this.myAddLog(`Unknown agent ${myMsg.senderId} attempted to disconnect.`);
-                        }
-                        break;
-
-                    case 'AGENT_PING':
-                        // this.myAddLog(`Agent ${myMsg.senderId} responded to ping.`);
-                        break;
-
-                    default:
-                        this.myAddLog(`Unknown message type received from agent ${myMsg.senderId}: ${myMsg.type}`);
-                        break;
+                } catch (myError) {
+                    this.myAddLog(`Error connecting to serial port: ${myError.message}`);
+                    this.mySerialConnected = false;
+                    this.myUpdateUIForConnectionStatus();
                 }
             }
 
-            myUpdateClientListAndNotify() {
-                this.myClientUpdateListeners.forEach(myListener => myListener());
-                const myClientList = Array.from(this.myClients.values()).map(myC => ({ id: myC.id, name: myC.name, status: myC.status }));
-                this.myBroadcastMessageToClients('COORDINATOR_AGENT_LIST_UPDATE', { agents: myClientList });
+            async mySendSerialCommand(myCommand) {
+                if (this.mySerialWriter && this.mySerialConnected) {
+                    try {
+                        await this.mySerialWriter.write(myCommand);
+                        this.myAddLog(`Sent serial command: ${myCommand.trim()}`);
+                    } catch (myError) {
+                        this.myAddLog(`Error sending serial command: ${myError.message}`);
+                    }
+                } else {
+                    this.myAddLog("Serial port not open to send command.");
+                }
             }
 
-            myOnLog(myListener) {
-                this.myLogListeners.push(myListener);
-                return () => this.myLogListeners = this.myLogListeners.filter(myL => myL !== myListener);
+            async myReadSerialData() {
+                while (this.mySerialPort && this.mySerialPort.readable && this.mySerialConnected) {
+                    try {
+                        const { value, done } = await this.mySerialReader.read();
+                        if (done) {
+                            this.myAddLog("Serial port reader closed.");
+                            break;
+                        }
+                        const myReceivedData = value.trim();
+                        this.myAddLog(`Received serial data: ${myReceivedData}`);
+
+                        // Example: Process incoming data and send to coordinator
+                        // Assuming microcontroller sends "SENSOR_TEMP:25.3" or "BUTTON_PRESSED"
+                        if (myReceivedData.startsWith("SENSOR_TEMP:")) {
+                            const myTemperature = parseFloat(myReceivedData.substring(12));
+                            this.mySendMessageToCoordinator('SENSOR_DATA', { type: 'temperature', value: myTemperature, unit: 'C' });
+                        } else if (myReceivedData.startsWith("BUTTON_PRESSED")) {
+                            this.mySendMessageToCoordinator('SENSOR_DATA', { type: 'button_press', value: 'pressed' });
+                        }
+                        // Add more parsing and message sending logic here for other sensor types
+                        // For example, if LLM asks agent to get a sensor reading, this is where it would be received.
+
+                    } catch (myError) {
+                        this.myAddLog(`Error reading serial data: ${myError.message}`);
+                        break; // Exit loop on error
+                    }
+                }
+                this.mySerialConnected = false;
+                this.myUpdateUIForConnectionStatus();
+                this.myAddLog("Disconnected from serial port.");
             }
 
-            myOnClientUpdate(myListener) {
-                this.myClientUpdateListeners.push(myListener);
-                return () => this.myClientUpdateListeners = this.myClientUpdateListeners.filter(myL => myL !== myListener);
+            // --- My Local LLM Integration (Conceptual) ---
+            async myCallLLM(myPrompt) {
+                this.myAddLog(`Calling simulated local LLM with prompt: "${myPrompt.substring(0, 50)}..."`);
+                this.myConversationHistory.push({ type: 'thought', text: `Calling simulated local LLM with prompt: "${myPrompt.substring(0, 50)}..."`, timestamp: new Date().toISOString() });
+                this.myUpdateConversationUI();
+
+                // Simulate LLM processing time
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // --- Placeholder for actual local LLM inference ---
+                // Here, you would load your local WASM model (e.g., ONNX Runtime Web, Web LLM)
+                // or make an API call to a local server running an LLM (e.g., Ollama).
+                // Example for a mock response:
+                const myMockResponse = `(Simulated LLM response for: "${myPrompt}") - This agent has processed your query and could potentially use external tools or sensors.`;
+
+                this.myAddLog(`Simulated LLM Response: ${myMockResponse.substring(0, 100)}...`);
+                return myMockResponse;
             }
 
-            myGetClients() {
-                return Array.from(this.myClients.values()).map(myC => ({ id: myC.id, name: myC.name, status: myC.status }));
+            // --- My Joke API Tool Integration ---
+            async myFetchJoke() {
+                this.myAddLog(`Fetching joke from Chuck Norris API...`);
+                this.myConversationHistory.push({ type: 'tool_call', toolName: 'chuck_norris_joke_api', parameters: {}, timestamp: new Date().toISOString() });
+                this.myUpdateConversationUI();
+
+                try {
+                    const myResponse = await fetch(this.myChuckNorrisJokeAPI);
+                    if (!myResponse.ok) {
+                        throw new Error(`HTTP error! status: ${myResponse.status}`);
+                    }
+                    const myData = await myResponse.json();
+                    const myJoke = myData.value;
+                    this.myAddLog(`Received joke: "${myJoke}"`);
+                    return myJoke;
+                } catch (myError) {
+                    this.myAddLog(`Error fetching joke: ${myError.message}`);
+                    return `Error fetching joke: ${myError.message}`;
+                }
             }
         }
 
         // --- My Global DOM Utilities & Application Setup ---
 
-        let myCoordinatorInstance;
-        const myServerLogsDiv = document.getElementById('my-server-logs');
-        const myClientListDiv = document.getElementById('my-client-list');
-        const myConnectedClientsCountSpan = document.getElementById('my-connected-clients-count');
-        const mySpawnClientButton = document.getElementById('my-spawn-client-button');
+        const myClientTitle = document.getElementById('my-client-title');
+        const myConnectionSection = document.getElementById('my-connection-section');
+        const myClientNameInput = document.getElementById('my-client-name-input');
+        const myConnectButton = document.getElementById('my-connect-button');
+
+        const myMicrocontrollerSection = document.getElementById('my-microcontroller-section');
+        const myConnectSerialButton = document.getElementById('my-connect-serial-button');
+        const mySerialStatus = document.getElementById('my-serial-status');
+        const mySendSerialCommandButton = document.getElementById('my-send-serial-command-button');
+
+        const myConversationSection = document.getElementById('my-conversation-section');
+        const myClientConversationDiv = document.getElementById('my-client-conversation-div');
+        const myQueryInput = document.getElementById('my-query-input');
+        const mySendQueryButton = document.getElementById('my-send-query-button');
+
+        const myClientLogsDiv = document.getElementById('my-client-logs');
 
         function myAppendLog(myElement, myMessage) {
             const myP = document.createElement('p');
@@ -205,46 +469,24 @@
             myElement.scrollTop = myElement.scrollHeight;
         }
 
-        function myUpdateServerClientList() {
-            myClientListDiv.innerHTML = '';
-            const myClients = myCoordinatorInstance.myGetClients();
-            if (myClients.length === 0) {
-                const myP = document.createElement('p');
-                myP.style.color = 'gray';
-                myP.style.fontStyle = 'italic';
-                myP.textContent = 'No agents connected yet.';
-                myClientListDiv.appendChild(myP);
-            } else {
-                myClients.forEach(myClient => {
-                    const myP = document.createElement('p');
-                    myP.classList.add('my-client-item');
-                    myP.innerHTML = `<strong>${myClient.name}</strong> (ID: ${myClient.id.substring(0, 8)}...) - Status: ${myClient.status}`;
-                    myClientListDiv.appendChild(myP);
-                });
-            }
-            myConnectedClientsCountSpan.textContent = myClients.length;
-        }
-
-        function mySpawnNewClientTab() {
-            // Open my_llm_agent_client.html in a new tab
-            window.open('./my_llm_agent_client.html', '_blank', 'noopener');
-        }
+        let myLLMAgentInstance;
 
         // Initialize on window load
         window.onload = function() {
-            myCoordinatorInstance = new MyAgentCoordinator();
-
-            myCoordinatorInstance.myOnLog((myLog) => {
-                myAppendLog(myServerLogsDiv, myLog);
+            myLLMAgentInstance = new MyLLM_Agent({
+                myClientTitle,
+                myConnectionSection,
+                myClientNameInput,
+                myConnectButton,
+                myConversationSection,
+                myClientConversationDiv,
+                myQueryInput,
+                mySendQueryButton,
+                myClientLogsDiv,
+                myConnectSerialButton,
+                mySerialStatus,
+                mySendSerialCommandButton
             });
-
-            myCoordinatorInstance.myOnClientUpdate(() => {
-                myUpdateServerClientList();
-            });
-
-            mySpawnClientButton.addEventListener('click', mySpawnNewClientTab);
-
-            myUpdateServerClientList(); // Initial list update
         };
     </script>
 </body>
