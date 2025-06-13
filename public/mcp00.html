@@ -4,20 +4,91 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Model Context Protocol Server with LLM Agents</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Removed Tailwind CSS CDN -->
     <style>
-        /* Minimal CSS for basic layout and readability */
-        body { font-family: 'Inter', sans-serif; margin: 20px; background-color: #f0f0f0; color: #333; }
-        .my-main-container { display: flex; gap: 20px; max-width: 1400px; margin: 0 auto; flex-wrap: wrap; }
-        .my-server-panel { flex: 1; min-width: 350px; background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        .my-clients-container { display: flex; flex-wrap: wrap; gap: 20px; flex: 2; min-width: 350px; }
-        .my-client-panel { flex: 1; min-width: 300px; max-width: 450px; background-color: #f9f9f9; padding: 15px; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; }
+        /* Essential CSS for basic layout and readability - No Tailwind CSS */
+        body {
+            font-family: sans-serif; /* Simpler than 'Inter' without importing a font */
+            margin: 20px;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        .my-main-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+        .my-server-panel {
+            flex: 1;
+            min-width: 350px;
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .my-clients-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            flex: 2;
+            min-width: 350px;
+        }
+        .my-client-panel {
+            flex: 1;
+            min-width: 300px;
+            max-width: 450px;
+            background-color: #f9f9f9;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+        }
 
-        h1, h2, h3 { margin-top: 0; margin-bottom: 15px; }
-        /* Added resize: vertical and overflow: auto for log boxes */
-        .my-log-box, .my-client-list-box, .my-conversation-box { border: 1px solid #eee; background-color: #fafafa; padding: 10px; height: 180px; margin-bottom: 15px; border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; word-break: break-word; resize: vertical; overflow: auto; /* Combines overflow-y: auto and adds overflow-x: auto */ }
-        input[type="text"] { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; }
+        h1, h2, h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .my-log-box, .my-client-list-box, .my-conversation-box {
+            border: 1px solid #eee;
+            background-color: #fafafa;
+            padding: 10px;
+            height: 180px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            word-break: break-word;
+            resize: vertical;
+            overflow: auto;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px); /* Adjust for padding and border */
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            box-sizing: border-box;
+            transition: background-color 0.3s ease; /* Simple transition */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Simple shadow */
+        }
         button.my-spawn-button { background-color: #007bff; }
         button.my-spawn-button:hover { background-color: #0056b3; }
         button.my-connect-button { background-color: #28a745; }
@@ -33,7 +104,9 @@
         .my-agent-thought { color: #555; font-style: italic; }
         .my-tool-call { color: #b300b3; font-weight: bold; }
         .my-tool-result { color: #009900; }
-        .my-tool-result img { max-width: 100%; height: auto; border-radius: 8px; margin-top: 10px; } /* Added styling for images */
+        .my-tool-result img, .my-received-image img { max-width: 100%; height: auto; border-radius: 8px; margin-top: 10px; } /* Added styling for images */
+        .my-received-image { margin-bottom: 5px; }
+
 
         @media (max-width: 1024px) {
             .my-main-container { flex-direction: column; }
@@ -44,21 +117,25 @@
 <body>
     <div class="my-main-container">
         <!-- Server Panel (Agent Coordinator) -->
-        <div id="my-server-panel" class="my-server-panel rounded-lg">
-            <h2 class="text-xl font-semibold mb-4">Model Context Protocol (MCP Server) for client-side AI- Agents</h2>
-            Set up your chat name then<br>
+        <div id="my-server-panel" class="my-server-panel">
+            <h2>Model Context Protocol (MCP Server) for client-side AI- Agents</h2>
+
+
+            Spawn one or more chat names then<br>
             Try in the chat: "Tell a Joke"  or mention the word "dog"<br>
             The github is at <a href="https://github.com/hpssjellis/my-examples-of-mcp-js/tree/main">https://github.com/hpssjellis/my-examples-of-mcp-js/tree/main</a><br>
             
-            <p class="text-sm text-gray-600 mb-4">Note: The main webSocket server should be written in NodeJS and run a backend, but to demonstrate what I am trying to show we are going to keep these as static webpages. If you like it, a Node WebSocket should be the next step so that spawned websites can be anywhere not just one computer.</p>
-            <button id="my-spawn-client-button" class="my-spawn-button w-full py-2 px-4 rounded-md shadow-md hover:shadow-lg transition-all duration-300">Spawn New LLM Agent</button>
 
-            <h3 class="text-lg font-medium mt-6 mb-3">My Connected Agents (<span id="my-connected-clients-count">0</span>)</h3>
-            <div id="my-client-list" class="my-client-list-box rounded-md">
-                <p class="text-gray-500 italic">No agents connected yet.</p>
+            
+            <p style="font-size: 0.875em; color: #6b7280; margin-bottom: 1rem;">Note: The main webSocket server should be written in NodeJS and run a backend, but to demonstrate what I am trying to show we are going to keep these as static webpages. If you like it, a Node WebSocket should be the next step so that spawned websites can be anywhere not just one computer.</p>
+            <button id="my-spawn-client-button" class="my-spawn-button">Spawn New LLM Agent</button>
+
+            <h3 style="margin-top: 1.5rem; margin-bottom: 0.75rem;">My Connected Agents (<span id="my-connected-clients-count">0</span>)</h3>
+            <div id="my-client-list" class="my-client-list-box">
+                <p style="color: gray; font-style: italic;">No agents connected yet.</p>
             </div>
-            <h3 class="text-lg font-medium mt-6 mb-3">My Coordinator Logs</h3>
-            <div id="my-server-logs" class="my-log-box rounded-md"></div>
+            <h3 style="margin-top: 1.5rem; margin-bottom: 0.75rem;">My Coordinator Logs</h3>
+            <div id="my-server-logs" class="my-log-box"></div>
         </div>
 
         <!-- Clients Container (where new agent panels will be added) -->
@@ -157,108 +234,114 @@
                         break;
 
                     case 'USER_QUERY':
-                        const myQueryText = myMsg.payload.query;
-                        this.myAddLog(`User Query from ${mySendingClientInstance.myClientName}: "${myQueryText}"`);
-                        
+                        const myQueryText = myMsg.payload.query.toLowerCase();
+                        let handledByApi = false; // Flag to check if an API call was made
+
                         this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
                             senderName: mySendingClientInstance.myClientName,
                             text: `Query: "${myQueryText}" (processing...)`
                         });
 
-                        if (myQueryText.toLowerCase().includes('dog')) { // Check for "dog"
+                        // Check for "dog" command
+                        if (myQueryText.includes('dog')) {
                             this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Fetching a random dog image!' });
-                            
                             try {
                                 const response = await fetch('https://dog.ceo/api/breeds/image/random');
                                 const dogData = await response.json();
-                                console.log('Dog API Raw JSON:', dogData); // Log raw JSON to console
-                                const rawJson = JSON.stringify(dogData, null, 2); // Pretty print JSON
+                                console.log('Dog API Raw JSON:', dogData);
+                                const rawJson = JSON.stringify(dogData, null, 2);
 
+                                // Send TOOL_RESULT (raw JSON) to the initiating agent
                                 this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'dog_image', result: rawJson });
                                 
-                                const agentResponse = `Here's a dog image:`; // Simplified response for chat log
-                                this.mySendMessageToClient(mySendingClientInstance, 'AGENT_RESPONSE', { response: agentResponse });
-                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: ${dogData.message}` }); // Show image URL in coordinator log
-
+                                // Broadcast image URL to ALL agents using a new type
+                                this.myBroadcastMessageToClients('COORDINATOR_IMAGE_BROADCAST', { imageUrl: dogData.message, senderName: mySendingClientInstance.myClientName });
+                                
+                                handledByApi = true;
                             } catch (error) {
                                 console.error('Failed to fetch dog image:', error);
                                 this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'dog_image', result: `Error fetching dog image: ${error.message}` });
-                                const agentResponse = `I tried to fetch a dog image, but something went wrong: ${error.message}`;
-                                this.mySendMessageToClient(mySendingClientInstance, 'AGENT_RESPONSE', { response: agentResponse });
-                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: "${agentResponse}"` });
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Error fetching dog image: ${error.message}` });
+                                handledByApi = true;
                             }
                         }
-                        else if (myQueryText.toLowerCase() === 'tell a joke') {
-                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Hmm, time for a laugh... fetching a joke!' });
-                            
+
+                        // Check for "tell a joke" command
+                        if (myQueryText.includes('tell a joke')) {
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Time for a laugh... fetching a joke!' });
                             try {
                                 const response = await fetch('https://api.chucknorris.io/jokes/random');
                                 const jokeData = await response.json();
-                                console.log('Chuck Norris Joke API Raw JSON:', jokeData); // Log raw JSON to console
-                                const rawJson = JSON.stringify(jokeData, null, 2); // Pretty print JSON
+                                console.log('Chuck Norris Joke API Raw JSON:', jokeData);
+                                const rawJson = JSON.stringify(jokeData, null, 2);
 
                                 this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'chuck_norris_joke', result: rawJson });
-                                
-                                const agentResponse = `Here's a Chuck Norris joke:\n\n${jokeData.value}`; // Use jokeData.value for the actual joke text in the response
-                                this.mySendMessageToClient(mySendingClientInstance, 'AGENT_RESPONSE', { response: agentResponse });
-                                // Broadcast the actual joke text, not just a truncation
-                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: "${agentResponse}"` });
-
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Here's a Chuck Norris joke: "${jokeData.value}"` });
+                                handledByApi = true;
                             } catch (error) {
                                 console.error('Failed to fetch joke:', error);
                                 this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'chuck_norris_joke', result: `Error fetching joke: ${error.message}` });
-                                const agentResponse = `I tried to fetch a joke, but something went wrong: ${error.message}`;
-                                this.mySendMessageToClient(mySendingClientInstance, 'AGENT_RESPONSE', { response: agentResponse });
-                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: "${agentResponse}"` });
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Error fetching joke: ${error.message}` });
+                                handledByApi = true;
                             }
-                        } else {
-                            // Existing simulated search logic for other queries
-                            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate LLM processing time
-                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Considering the user query and potential tools.' });
-                            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate more processing
+                        }
 
-                            // Simulate a tool call (e.g., a "search" tool)
+                        // If no specific API was triggered, fall back to simulated search
+                        if (!handledByApi) {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Considering the user query and potential tools.' });
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+
                             this.mySendMessageToClient(mySendingClientInstance, 'TOOL_CALL', { toolName: 'search_tool', parameters: { query: myQueryText } });
-                            await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate tool execution time
+                            await new Promise(resolve => setTimeout(resolve, 1500));
                             const myToolResult = `[Mock Search Result for "${myQueryText}"]: Data from a simulated external knowledge base.`;
                             this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'search_tool', result: myToolResult });
-                            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate more processing
+                            await new Promise(resolve => setTimeout(resolve, 1000));
 
                             const myAgentResponse = `Based on my analysis and the simulated search, I can tell you about: "${myQueryText}". ${myToolResult}`;
                             this.mySendMessageToClient(mySendingClientInstance, 'AGENT_RESPONSE', { response: myAgentResponse });
                             this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: "${myAgentResponse}"` });
                         }
-                        break;
+                        break; 
 
                     case 'AGENT_THOUGHT':
                     case 'TOOL_CALL':
-                    case 'TOOL_RESULT':
                     case 'AGENT_RESPONSE':
                         // These are typically messages from an agent to the coordinator,
                         // which the coordinator might log, route, or use to update state.
                         // For this demo, we just log them and might broadcast for visibility.
-                        // For TOOL_RESULT, if the payload's 'result' is very long, truncate it for the broadcast log
+                        this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
+                            senderName: mySendingClientInstance.myClientName,
+                            text: `[${myMsg.type}]: ${JSON.stringify(myMsg.payload)}`
+                        });
+                        break;
+                    case 'TOOL_RESULT':
+                        // Special handling for TOOL_RESULT to ensure full content or relevant info is broadcasted
                         let broadcastTextPayload;
-                        if (myMsg.type === 'TOOL_RESULT' && myMsg.payload.result && myMsg.payload.result.length > 100) {
-                             try {
-                                 const parsedResult = JSON.parse(myMsg.payload.result);
-                                 // Check if it's a dog image URL
-                                 if (parsedResult.message && typeof parsedResult.message === 'string' && parsedResult.message.startsWith('https://images.dog.ceo')) {
-                                     broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (Dog image URL: ${parsedResult.message})`;
-                                 } else {
-                                     broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (full JSON in agent's log)`;
-                                 }
-                             } catch (e) {
-                                 // Not valid JSON or too short to be meaningful
-                                 broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.result.substring(0, 100)}...`;
-                             }
-                        } else {
-                            broadcastTextPayload = `[${myMsg.type}]: ${JSON.stringify(myMsg.payload)}`;
+                        try {
+                            const parsedResult = JSON.parse(myMsg.payload.result);
+                            if (myMsg.payload.toolName === 'dog_image' && parsedResult.message && typeof parsedResult.message === 'string' && parsedResult.message.startsWith('https://images.dog.ceo')) {
+                                // For dog_image tool result, the image is now broadcasted via a separate message type
+                                broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (JSON in agent's log)`;
+                            } else if (myMsg.payload.toolName === 'chuck_norris_joke' && parsedResult.value) {
+                                 broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (Joke: "${parsedResult.value}")`;
+                            } else {
+                                broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (full JSON in agent's log)`;
+                            }
+                        } catch (e) {
+                            broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.result.substring(0, 100)}... (truncated)`;
                         }
                         this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
                             senderName: mySendingClientInstance.myClientName,
                             text: broadcastTextPayload
                         });
+                        break;
+
+                    case 'COORDINATOR_IMAGE_BROADCAST':
+                        // Coordinator sends this to all clients for image display
+                        // This case does not need to be explicitly handled by the coordinator's switch,
+                        // as the coordinator is the one sending it out.
+                        // It will be handled in the agent's myReceiveMessage.
                         break;
 
                     case 'AGENT_DISCONNECT':
@@ -326,6 +409,7 @@
                 this.myUiElements.myClientNameInput.addEventListener('input', this.myUpdateUIForConnectionStatus.bind(this));
                 this.myUiElements.myClientNameInput.addEventListener('keydown', (myEvent) => {
                     if (myEvent.key === 'Enter') {
+                        myEvent.preventDefault(); // Prevent new line on Enter
                         this.myHandleConnect();
                     }
                 });
@@ -334,6 +418,7 @@
                 this.myUiElements.myQueryInput.addEventListener('input', this.myUpdateUIForConnectionStatus.bind(this));
                 this.myUiElements.myQueryInput.addEventListener('keydown', (myEvent) => {
                     if (myEvent.key === 'Enter') {
+                        myEvent.preventDefault(); // Prevent new line on Enter
                         this.myHandleSendQuery();
                     }
                 });
@@ -378,6 +463,17 @@
                             type: 'broadcast',
                             sender: myMsg.payload.senderName,
                             text: myMsg.payload.text,
+                            timestamp: myMsg.timestamp
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+
+                    case 'COORDINATOR_IMAGE_BROADCAST':
+                        // Handle image broadcast from coordinator
+                        this.myConversationHistory.push({
+                            type: 'received_image',
+                            sender: myMsg.payload.senderName,
+                            imageUrl: myMsg.payload.imageUrl,
                             timestamp: myMsg.timestamp
                         });
                         this.myUpdateConversationUI();
@@ -508,6 +604,18 @@
                         case 'broadcast':
                             myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> ${myMsg.text} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
                             break;
+                        case 'received_image':
+                            myP.classList.add('my-received-image');
+                            const img = document.createElement('img');
+                            img.src = myMsg.imageUrl;
+                            img.alt = `Image from ${myMsg.sender}`;
+                            img.onerror = () => {
+                                img.src = 'https://placehold.co/300x200/cccccc/333333?text=Image+Load+Error';
+                                img.alt = 'Image Load Error';
+                            };
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> Shared an image! <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            myP.appendChild(img);
+                            break;
                         case 'thought':
                             myP.classList.add('my-agent-thought');
                             myP.innerHTML = `<em>Agent Thought: ${myMsg.text}</em> <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
@@ -518,27 +626,7 @@
                             break;
                         case 'tool_result':
                             myP.classList.add('my-tool-result');
-                            if (myMsg.toolName === 'dog_image') {
-                                try {
-                                    const dogData = JSON.parse(myMsg.result);
-                                    if (dogData.message && typeof dogData.message === 'string' && dogData.message.startsWith('https://images.dog.ceo')) {
-                                        const img = document.createElement('img');
-                                        img.src = dogData.message;
-                                        img.alt = 'Random Dog Image';
-                                        img.onerror = () => {
-                                            img.src = 'https://placehold.co/300x200/cccccc/333333?text=Image+Load+Error';
-                                            img.alt = 'Image Load Error';
-                                        };
-                                        myP.appendChild(img);
-                                    } else {
-                                        myP.innerHTML = `<pre>${myMsg.result}</pre>`; // Fallback to raw JSON if no valid image URL
-                                    }
-                                } catch (e) {
-                                    myP.innerHTML = `<pre>${myMsg.result}</pre>`; // Fallback to raw JSON on parse error
-                                }
-                            } else {
-                                myP.innerHTML = `<pre>${myMsg.result}</pre>`; // For other tool results, display raw JSON
-                            }
+                            myP.innerHTML = `<pre>${myMsg.result}</pre>`; // For tool results, display raw JSON
                             break;
                         case 'agent_response':
                             myP.innerHTML = `<span class="my-sender">Agent Final Response:</span> ${myMsg.response} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
@@ -592,24 +680,24 @@
         function myCreateClientPanelAndInstance() {
             // 1. Create HTML elements for the new client panel
             const myPanel = document.createElement('div');
-            myPanel.classList.add('my-client-panel', 'rounded-lg'); // Added rounded-lg
+            myPanel.classList.add('my-client-panel'); // Removed 'rounded-lg' as it's now in CSS
             const myClientIdSuffix = Math.random().toString(36).substring(2, 9); // Unique ID suffix for panel and its elements
 
             myPanel.innerHTML = `
-                <h2 id="my-client-title-${myClientIdSuffix}" class="text-xl font-semibold mb-4">My LLM Agent (Not Connected)</h2>
+                <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;" id="my-client-title-${myClientIdSuffix}">My LLM Agent (Not Connected)</h2>
                 <div id="my-connection-section-${myClientIdSuffix}">
-                    <h3 class="text-lg font-medium mb-3">Connect to Coordinator</h3>
-                    <input type="text" id="my-client-name-input-${myClientIdSuffix}" placeholder="Enter agent name" class="w-full py-2 px-3 border border-gray-300 rounded-md mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button id="my-connect-button-${myClientIdSuffix}" class="my-connect-button w-full py-2 px-4 rounded-md shadow-md hover:shadow-lg transition-all duration-300">Connect</button>
+                    <h3 style="font-size: 1.125rem; font-weight: 500; margin-bottom: 0.75rem;">Connect to Coordinator</h3>
+                    <input type="text" id="my-client-name-input-${myClientIdSuffix}" placeholder="Enter agent name">
+                    <button id="my-connect-button-${myClientIdSuffix}" class="my-connect-button">Connect</button>
                 </div>
                 <div id="my-conversation-section-${myClientIdSuffix}" style="display: none;">
-                    <h3 class="text-lg font-medium mt-6 mb-3">My Conversation</h3>
-                    <div id="my-client-conversation-div-${myClientIdSuffix}" class="my-conversation-box rounded-md"></div>
-                    <input type="text" id="my-query-input-${myClientIdSuffix}" placeholder="Type your query for the agent" class="w-full py-2 px-3 border border-gray-300 rounded-md mb-3 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <button id="my-send-query-button-${myClientIdSuffix}" class="my-send-button w-full py-2 px-4 rounded-md shadow-md hover:shadow-lg transition-all duration-300">Send Query</button>
+                    <h3 style="font-size: 1.125rem; font-weight: 500; margin-top: 1.5rem; margin-bottom: 0.75rem;">My Conversation</h3>
+                    <div id="my-client-conversation-div-${myClientIdSuffix}" class="my-conversation-box"></div>
+                    <input type="text" id="my-query-input-${myClientIdSuffix}" placeholder="Type your query for the agent">
+                    <button id="my-send-query-button-${myClientIdSuffix}" class="my-send-button">Send Query</button>
                 </div>
-                <h3 class="text-lg font-medium mt-6 mb-3">My Agent Logs</h3>
-                <div id="my-client-logs-${myClientIdSuffix}" class="my-log-box rounded-md"></div>
+                <h3 style="font-size: 1.125rem; font-weight: 500; margin-top: 1.5rem; margin-bottom: 0.75rem;">My Agent Logs</h3>
+                <div id="my-client-logs-${myClientIdSuffix}" class="my-log-box"></div>
             `;
             myClientsContainer.appendChild(myPanel);
 
