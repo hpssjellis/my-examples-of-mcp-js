@@ -6,7 +6,7 @@ Started June 12/ 2025
 
 Demo at 
 
-https://hpssjellis.github.io/my-examples-of-browser-mcp-ai-agent/public/index.html
+https://hpssjellis.github.io/my-examples-of-mcp-js/public/index.html
 
 
 
