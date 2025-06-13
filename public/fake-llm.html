@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake LLM Agent</title>
+    <style>
+        /* Essential CSS copied from main server page for consistency */
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        .my-client-panel {
+            min-width: 300px;
+            max-width: 450px;
+            background-color: #f9f9f9;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            margin: 20px auto; /* Center the panel */
+        }
+
+        h1, h2, h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .my-log-box, .my-conversation-box {
+            border: 1px solid #eee;
+            background-color: #fafafa;
+            padding: 10px;
+            height: 180px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            word-break: break-word;
+            resize: vertical;
+            overflow: auto;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            box-sizing: border-box;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button.my-connect-button { background-color: #28a745; }
+        button.my-connect-button:hover { background-color: #218838; }
+        button.my-send-button { background-color: #6f42c1; }
+        button.my-send-button:hover { background-color: #56369f; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        .my-message { margin-bottom: 5px; }
+        .my-message .my-sender { font-weight: bold; }
+        .my-system-message { color: #888; font-style: italic; }
+        .my-agent-thought { color: #555; font-style: italic; }
+        .my-tool-call { color: #b300b3; font-weight: bold; }
+        .my-tool-result { color: #009900; }
+        .my-tool-result img, .my-received-image img { max-width: 100%; height: auto; border-radius: 8px; margin-top: 10px; }
+        .my-received-image { margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div id="my-fake-llm-panel" class="my-client-panel">
+        <h2 id="my-client-title" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">My LLM Agent (Fake/Standalone)</h2>
+        <div id="my-connection-section">
+            <h3 style="font-size: 1.125rem; font-weight: 500; margin-bottom: 0.75rem;">Connect to Coordinator (Simulated)</h3>
+            <input type="text" id="my-client-name-input" placeholder="Enter agent name">
+            <button id="my-connect-button" class="my-connect-button">Connect (Simulated)</button>
+        </div>
+        <div id="my-conversation-section" style="display: none;">
+            <h3 style="font-size: 1.125rem; font-weight: 500; margin-top: 1.5rem; margin-bottom: 0.75rem;">My Conversation</h3>
+            <div id="my-client-conversation-div" class="my-conversation-box"></div>
+            <input type="text" id="my-query-input" placeholder="Type your query for the agent">
+            <button id="my-send-query-button" class="my-send-button">Send Query</button>
+        </div>
+        <h3 style="font-size: 1.125rem; font-weight: 500; margin-top: 1.5rem; margin-bottom: 0.75rem;">My Agent Logs</h3>
+        <div id="my-client-logs" class="my-log-box"></div>
+    </div>
+
+    <script type="module">
+        // Helper function for appending logs
+        function myAppendLog(myElement, myMessage) {
+            const myP = document.createElement('p');
+            myP.textContent = myMessage;
+            myElement.appendChild(myP);
+            myElement.scrollTop = myElement.scrollHeight;
+        }
+
+        // --- My LLM Agent Logic (Standalone Version) ---
+        class MyLLM_Agent {
+            myClientId;
+            myClientName = null;
+            myIsConnected = false;
+            myLogs = [];
+            myConversationHistory = [];
+            myUiElements;
+
+            constructor(myUiElements) {
+                this.myUiElements = myUiElements;
+                this.myClientId = `fake-agent-${Math.random().toString(36).substring(2, 9)}`;
+                this.myAddLog(`Fake LLM Agent instance created with ID: ${this.myClientId}`);
+
+                // Explicitly check each element and bind listeners
+                // using local variables to prevent repetitive property access on 'this.myUiElements'
+                // and to clearly separate the existence check from the binding.
+
+                const connectButton = this.myUiElements.myConnectButton;
+                const clientNameInput = this.myUiElements.myClientNameInput;
+                const sendQueryButton = this.myUiElements.mySendQueryButton;
+                const queryInput = this.myUiElements.myQueryInput;
+
+                if (connectButton) {
+                    connectButton.addEventListener('click', this.myHandleConnect.bind(this));
+                } else {
+                    console.error("DEBUG: myConnectButton element not found!");
+                }
+                
+                if (clientNameInput) {
+                    clientNameInput.addEventListener('input', this.myUpdateUIForConnectionStatus.bind(this));
+                    clientNameInput.addEventListener('keydown', (myEvent) => {
+                        if (myEvent.key === 'Enter') {
+                            myEvent.preventDefault();
+                            this.myHandleConnect();
+                        }
+                    });
+                } else {
+                    console.error("DEBUG: myClientNameInput element not found!");
+                }
+
+                if (sendQueryButton) {
+                    sendQueryButton.addEventListener('click', this.myHandleSendQuery.bind(this));
+                } else {
+                    console.error("DEBUG: mySendQueryButton element not found!");
+                }
+                
+                if (queryInput) {
+                    queryInput.addEventListener('input', this.myUpdateUIForConnectionStatus.bind(this));
+                    queryInput.addEventListener('keydown', (myEvent) => {
+                        if (myEvent.key === 'Enter') {
+                            myEvent.preventDefault();
+                            this.myHandleSendQuery();
+                        }
+                    });
+                } else {
+                    console.error("DEBUG: myQueryInput element not found!");
+                }
+                
+                this.myUpdateUIForConnectionStatus();
+            }
+
+            myAddLog(myMessage) {
+                const myTimestamp = new Date().toLocaleTimeString();
+                const myLogEntry = `[${myTimestamp}] AGENT (${this.myClientName || this.myClientId}): ${myMessage}`;
+                this.myLogs.push(myLogEntry);
+                myAppendLog(this.myUiElements.myClientLogsDiv, myLogEntry);
+            }
+
+            // This method simulates receiving a message from a coordinator (or its own internal logic)
+            myReceiveMessage(myMsg) {
+                this.myAddLog(`Received internal message (${myMsg.type}): ${JSON.stringify(myMsg.payload).substring(0, 50)}...`);
+
+                switch (myMsg.type) {
+                    case 'COORDINATOR_ACCEPTED_CONNECTION':
+                        this.myIsConnected = true;
+                        this.myClientName = myMsg.payload.assignedName;
+                        this.myAddLog(`Connection successful! Assigned name: ${this.myClientName}`);
+                        this.myConversationHistory.push({ type: 'system', text: `You are connected as ${this.myClientName}.` });
+                        this.myUpdateConversationUI();
+                        this.myUpdateUIForConnectionStatus();
+                        break;
+                    case 'AGENT_THOUGHT':
+                        this.myConversationHistory.push({ type: 'thought', text: myMsg.payload.thought, timestamp: new Date().toISOString() });
+                        this.myUpdateConversationUI();
+                        break;
+                    case 'TOOL_CALL':
+                        this.myConversationHistory.push({
+                            type: 'tool_call',
+                            toolName: myMsg.payload.toolName,
+                            parameters: JSON.stringify(myMsg.payload.parameters),
+                            timestamp: new Date().toISOString()
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+                    case 'TOOL_RESULT':
+                        this.myConversationHistory.push({
+                            type: 'tool_result',
+                            toolName: myMsg.payload.toolName,
+                            result: myMsg.payload.result,
+                            timestamp: new Date().toISOString()
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+                    case 'AGENT_RESPONSE':
+                        this.myConversationHistory.push({
+                            type: 'agent_response',
+                            response: myMsg.payload.response,
+                            timestamp: new Date().toISOString()
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+                    case 'COORDINATOR_IMAGE_BROADCAST':
+                         this.myConversationHistory.push({
+                            type: 'received_image',
+                            sender: myMsg.payload.senderName, // This will be the fake agent's own name
+                            imageUrl: myMsg.payload.imageUrl,
+                            timestamp: new Date().toISOString()
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+                    default:
+                        this.myAddLog(`Unhandled internal message type: ${myMsg.type}`);
+                        break;
+                }
+            }
+
+            // This simulates sending a message to a coordinator (but handles it internally)
+            async mySendMessageToCoordinator(myType, myPayload) {
+                this.myAddLog(`Simulating send to coordinator (${myType}): ${JSON.stringify(myPayload).substring(0, 50)}...`);
+
+                if (myType === 'AGENT_CONNECT') {
+                    // Simulate coordinator accepting connection
+                    this.myReceiveMessage({
+                        type: 'COORDINATOR_ACCEPTED_CONNECTION',
+                        payload: { assignedName: myPayload.requestedName }
+                    });
+                    return;
+                }
+
+                if (myType === 'USER_QUERY') {
+                    const myQueryText = myPayload.query.toLowerCase();
+                    let handledByApi = false;
+
+                    // Simulate API calls directly within this agent
+                    if (myQueryText.includes('dog')) {
+                        this.myReceiveMessage({ type: 'AGENT_THOUGHT', payload: { thought: 'Fetching a random dog image!' } });
+                        try {
+                            const response = await fetch('https://dog.ceo/api/breeds/image/random');
+                            const dogData = await response.json();
+                            const rawJson = JSON.stringify(dogData, null, 2);
+
+                            this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'dog_image', result: rawJson } });
+                            this.myReceiveMessage({ type: 'COORDINATOR_IMAGE_BROADCAST', payload: { imageUrl: dogData.message, senderName: this.myClientName } }); // Self-broadcast
+                            handledByApi = true;
+                        } catch (error) {
+                            this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'dog_image', result: `Error fetching dog image: ${error.message}` } });
+                            handledByApi = true;
+                        }
+                    }
+
+                    if (myQueryText.includes('tell a joke')) {
+                        this.myReceiveMessage({ type: 'AGENT_THOUGHT', payload: { thought: 'Time for a laugh... fetching a joke!' } });
+                        try {
+                            const response = await fetch('https://api.chucknorris.io/jokes/random');
+                            const jokeData = await response.json();
+                            const rawJson = JSON.stringify(jokeData, null, 2);
+
+                            this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'chuck_norris_joke', result: rawJson } });
+                            this.myReceiveMessage({ type: 'AGENT_RESPONSE', payload: { response: `Here's a Chuck Norris joke:\n\n${jokeData.value}` } });
+                            handledByApi = true;
+                        } catch (error) {
+                            this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'chuck_norris_joke', result: `Error fetching joke: ${error.message}` } });
+                            this.myReceiveMessage({ type: 'AGENT_RESPONSE', payload: { response: `I tried to fetch a joke, but something went wrong: ${error.message}` } });
+                            handledByApi = true;
+                        }
+                    }
+
+                    if (!handledByApi) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        this.myReceiveMessage({ type: 'AGENT_THOUGHT', payload: { thought: 'Considering the user query and potential tools.' } });
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        this.myReceiveMessage({ type: 'TOOL_CALL', payload: { toolName: 'search_tool', parameters: { query: myQueryText } } });
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        const myToolResult = `[Mock Search Result for "${myQueryText}"]: Data from a simulated external knowledge base.`;
+                        this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'search_tool', result: myToolResult } });
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        const myAgentResponse = `Based on my analysis and the simulated search, I can tell you about: "${myQueryText}". ${myToolResult}`;
+                        this.myReceiveMessage({ type: 'AGENT_RESPONSE', payload: { response: myAgentResponse } });
+                    }
+                }
+            }
+
+            myUpdateUIForConnectionStatus() {
+                this.myUiElements.myClientTitle.textContent = this.myIsConnected ? `My LLM Agent (${this.myClientName})` : `My LLM Agent (Fake/Standalone)`;
+                this.myUiElements.myConnectionSection.style.display = this.myIsConnected ? 'none' : 'block';
+                this.myUiElements.myConversationSection.style.display = this.myIsConnected ? 'block' : 'none';
+
+                // Check if elements exist before setting disabled property
+                if (this.myUiElements.myClientNameInput) {
+                    this.myUiElements.myClientNameInput.disabled = this.myIsConnected;
+                }
+                if (this.myUiElements.myConnectButton) {
+                    this.myUiElements.myConnectButton.disabled = this.myIsConnected || !this.myUiElements.myClientNameInput.value.trim();
+                }
+                if (this.myUiElements.mySendQueryButton) {
+                    this.myUiElements.mySendQueryButton.disabled = !this.myIsConnected || !this.myUiElements.myQueryInput.value.trim();
+                }
+            }
+
+            myUpdateConversationUI() {
+                this.myUiElements.myClientConversationDiv.innerHTML = '';
+                this.myConversationHistory.forEach(myMsg => {
+                    const myP = document.createElement('p');
+                    myP.classList.add('my-message');
+                    const myTimestampStr = new Date(myMsg.timestamp || Date.now()).toLocaleTimeString();
+
+                    switch (myMsg.type) {
+                        case 'system':
+                            myP.classList.add('my-system-message');
+                            myP.textContent = myMsg.text;
+                            break;
+                        case 'user_query':
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> ${myMsg.text} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'broadcast':
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> ${myMsg.text} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'received_image':
+                            myP.classList.add('my-received-image');
+                            const img = document.createElement('img');
+                            img.src = myMsg.imageUrl;
+                            img.alt = `Image from ${myMsg.sender}`;
+                            img.onerror = () => {
+                                img.src = 'https://placehold.co/300x200/cccccc/333333?text=Image+Load+Error';
+                                img.alt = 'Image Load Error';
+                            };
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> Shared an image! <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            myP.appendChild(img);
+                            break;
+                        case 'thought':
+                            myP.classList.add('my-agent-thought');
+                            myP.innerHTML = `<em>Agent Thought: ${myMsg.text}</em> <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'tool_call':
+                            myP.classList.add('my-tool-call');
+                            myP.innerHTML = `<strong>Tool Call: ${myMsg.toolName}(${myMsg.parameters})</strong> <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'tool_result':
+                            myP.classList.add('my-tool-result');
+                            myP.innerHTML = `<pre>${myMsg.result}</pre>`; // For tool results, display raw JSON
+                            break;
+                        case 'agent_response':
+                            myP.innerHTML = `<span class="my-sender">Agent Final Response:</span> ${myMsg.response} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        default:
+                            myP.textContent = JSON.stringify(myMsg);
+                            break;
+                    }
+                    this.myUiElements.myClientConversationDiv.appendChild(myP);
+                });
+                this.myUiElements.myClientConversationDiv.scrollTop = this.myUiElements.myClientConversationDiv.scrollHeight;
+            }
+        }
+
+        // --- Application Setup for Fake LLM ---
+        // Ensure DOM is fully loaded before initializing the agent
+        document.addEventListener('DOMContentLoaded', () => {
+            const myUiElements = {
+                myClientTitle: document.getElementById('my-client-title'),
+                myConnectionSection: document.getElementById('my-connection-section'),
+                myClientNameInput: document.getElementById('my-client-name-input'),
+                myConnectButton: document.getElementById('my-connect-button'),
+                myConversationSection: document.getElementById('my-conversation-section'),
+                myClientConversationDiv: document.getElementById('my-client-conversation-div'),
+                myQueryInput: document.getElementById('my-query-input'),
+                mySendQueryButton: document.getElementById('my-send-query-button'),
+                myClientLogsDiv: document.getElementById('my-client-logs')
+            };
+
+            // Initialize the agent
+            new MyLLM_Agent(myUiElements);
+        });
+    </script>
+</body>
+</html>
