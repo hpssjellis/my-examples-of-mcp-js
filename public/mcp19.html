@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Context Protocol Server with LLM Agents</title>
+    <style>
+        /* Essential CSS for basic layout and readability - No Tailwind CSS */
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        .my-main-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+        .my-server-panel {
+            flex: 1;
+            min-width: 350px;
+            display: flex;
+            flex-direction: column;
+        }
+        .my-clients-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            flex: 2;
+            min-width: 350px;
+        }
+        .my-client-panel {
+            flex: 1;
+            min-width: 300px;
+            max-width: 450px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .my-log-box, .my-client-list-box, .my-conversation-box {
+            resize: vertical;
+            overflow: auto;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+            box-sizing: border-box;
+            display: block; /* Ensure it behaves as a block element */
+        }
+        button {
+            width: 100%;
+            box-sizing: border-box;
+            display: block; /* Ensure it behaves as a block element */
+        }
+
+        @media (max-width: 1024px) {
+            .my-main-container { flex-direction: column; }
+            .my-server-panel, .my-clients-container { min-width: unset; flex: none; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="my-main-container">
+        <!-- Server Panel (Agent Coordinator) -->
+        <div id="my-server-panel" class="my-server-panel">
+            <h2>Model Context Protocol (MCP Server) for client-side AI- Agents</h2>
+            <p>Note: The main webSocket server should be written in NodeJS and run a backend, but to demonstrate what I am trying to show we are going to keep these as static webpages. If you like it, a Node WebSocket should be the next step so that spawned websites can be anywhere not just one computer.</p>
+            <button id="my-spawn-client-button" class="my-spawn-button">Spawn New LLM Agent</button>
+            <button id="my-load-fake-llm-button" class="my-spawn-button">Load Fake LLM (Inline)</button>
+
+
+            <h3>My Connected Agents (<span id="my-connected-clients-count">0</span>)</h3>
+            <div id="my-client-list" class="my-client-list-box">
+                <p>No agents connected yet.</p>
+            </div>
+            <h3>My Coordinator Logs</h3>
+            <div id="my-server-logs" class="my-log-box"></div>
+        </div>
+
+        <!-- Clients Container (where new agent panels will be added) -->
+        <div id="my-clients-container" class="my-clients-container">
+            <!-- LLM Agent panels will be dynamically inserted here -->
+        </div>
+    </div>
+
+    <script type="module">
+        // Helper function for appending logs
+        function myAppendLog(myElement, myMessage) {
+            const myP = document.createElement('p');
+            myP.textContent = myMessage;
+            myElement.appendChild(myP);
+            myElement.scrollTop = myElement.scrollHeight;
+        }
+
+        // --- My Message Structure (Model Context Protocol) ---
+        // type: string, representing the MCP message type (e.g., 'AGENT_CONNECT', 'USER_QUERY', 'AGENT_THOUGHT', 'TOOL_CALL', 'TOOL_RESULT', 'AGENT_RESPONSE')
+        // source: 'coordinator' or 'agent'
+        // senderId: unique ID of the sender ('coordinator', or 'agent-xyz')
+        // targetId: 'broadcast' for all, or a specific agent ID for targeted messages
+        // payload: object, data specific to the message type
+        // timestamp: ISO string of when the message was sent
+
+        // --- My Server-side Logic (Agent Coordinator) ---
+
+        class MyAgentCoordinator {
+            myClients = new Map(); // agentId -> { agentInstance, name, status }
+            myLogs = [];
+            myLogListeners = [];
+            myClientUpdateListeners = [];
+
+            constructor() {
+                this.myAddLog('My Agent Coordinator started (simulated).');
+            }
+
+            myAddLog(myMessage) {
+                const myTimestamp = new Date().toLocaleTimeString();
+                const myLogEntry = `[${myTimestamp}] COORDINATOR: ${myMessage}`;
+                this.myLogs.push(myLogEntry);
+                this.myLogListeners.forEach(myListener => myListener(myLogEntry));
+            }
+
+            // Sends a message directly to an agent instance
+            mySendMessageToClient(myTargetClientInstance, myType, myPayload) {
+                const myMessage = {
+                    source: 'coordinator',
+                    senderId: 'coordinator',
+                    type: myType,
+                    targetId: myTargetClientInstance.myClientId,
+                    payload: myPayload,
+                    timestamp: new Date().toISOString()
+                };
+                // Direct call to agent's message handling method
+                myTargetClientInstance.myReceiveMessage(myMessage);
+            }
+
+            // Broadcasts a message to all connected agent instances
+            myBroadcastMessageToClients(myType, myPayload) {
+                const myMessage = {
+                    source: 'coordinator',
+                    senderId: 'coordinator',
+                    type: myType,
+                    targetId: 'broadcast',
+                    payload: myPayload,
+                    timestamp: new Date().toISOString()
+                };
+                this.myClients.forEach(myClientInfo => {
+                    myClientInfo.agentInstance.myReceiveMessage(myMessage);
+                });
+            }
+
+            // Called directly by an agent instance when it wants to send a message to the coordinator
+            async myHandleIncomingClientMessage(myMsg, mySendingClientInstance) {
+                if (myMsg.source !== 'agent') {
+                    this.myAddLog('Received non-agent message, ignoring.');
+                    return;
+                }
+
+                this.myAddLog(`Received message from agent ${myMsg.senderId} (${myMsg.type})`);
+
+                switch (myMsg.type) {
+                    case 'AGENT_CONNECT':
+                        const myRequestedName = myMsg.payload.requestedName;
+                        const myAgentNameTaken = Array.from(this.myClients.values()).some(myC => myC.name === myRequestedName);
+
+                        if (myAgentNameTaken) {
+                            this.myAddLog(`Connection rejected for ${myMsg.senderId}: Name "${myRequestedName}" is already taken.`);
+                            this.mySendMessageToClient(mySendingClientInstance, 'COORDINATOR_REJECTED_CONNECTION', { reason: `Name "${myRequestedName}" is already taken.` });
+                        } else {
+                            const myNewClientInfo = {
+                                id: myMsg.senderId,
+                                agentInstance: mySendingClientInstance, // Store reference to the agent instance
+                                name: myRequestedName || myMsg.senderId,
+                                status: 'connected'
+                            };
+                            this.myClients.set(myMsg.senderId, myNewClientInfo);
+                            this.myAddLog(`Agent ${myNewClientInfo.id} (${myNewClientInfo.name}) connected.`);
+                            this.mySendMessageToClient(mySendingClientInstance, 'COORDINATOR_ACCEPTED_CONNECTION', { assignedName: myNewClientInfo.name });
+                            this.myUpdateClientListAndNotify();
+                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: 'Coordinator', text: `${myNewClientInfo.name} has joined the agent swarm.` });
+                        }
+                        break;
+
+                    case 'USER_QUERY':
+                        const myQueryText = myMsg.payload.query.toLowerCase();
+                        let handledByApi = false; // Flag to check if an API call was made
+
+                        this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
+                            senderName: mySendingClientInstance.myClientName,
+                            text: `Query: "${myQueryText}" (processing...)`
+                        });
+
+                        // Check for "dog" command
+                        if (myQueryText.includes('dog')) {
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Fetching a random dog image!' });
+                            try {
+                                const response = await fetch('https://dog.ceo/api/breeds/image/random');
+                                const dogData = await response.json();
+                                console.log('Dog API Raw JSON:', dogData);
+                                const rawJson = JSON.stringify(dogData, null, 2);
+
+                                // Send TOOL_RESULT (raw JSON) to the initiating agent
+                                this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'dog_image', result: rawJson });
+                                
+                                // Broadcast image URL to ALL agents using a new type
+                                this.myBroadcastMessageToClients('COORDINATOR_IMAGE_BROADCAST', { imageUrl: dogData.message, senderName: mySendingClientInstance.myClientName });
+                                
+                                handledByApi = true;
+                            } catch (error) {
+                                console.error('Failed to fetch dog image:', error);
+                                this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'dog_image', result: `Error fetching dog image: ${error.message}` });
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Error fetching dog image: ${error.message}` });
+                                handledByApi = true;
+                            }
+                        }
+
+                        // Check for "tell a joke" command
+                        if (myQueryText.includes('tell a joke')) {
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Time for a laugh... fetching a joke!' });
+                            try {
+                                const response = await fetch('https://api.chucknorris.io/jokes/random');
+                                const jokeData = await response.json();
+                                console.log('Chuck Norris Joke API Raw JSON:', jokeData);
+                                const rawJson = JSON.stringify(jokeData, null, 2);
+
+                                this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'chuck_norris_joke', result: rawJson });
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Here's a Chuck Norris joke: "${jokeData.value}"` });
+                                handledByApi = true;
+                            } catch (error) {
+                                console.error('Failed to fetch joke:', error);
+                                this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'chuck_norris_joke', result: `Error fetching joke: ${error.message}` });
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Error fetching joke: ${error.message}` });
+                                handledByApi = true;
+                            }
+                        }
+
+                        // If no specific API was triggered, fall back to simulated search
+                        if (!handledByApi) {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Considering the user query and potential tools.' });
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+
+                            this.mySendMessageToClient(mySendingClientInstance, 'TOOL_CALL', { toolName: 'search_tool', parameters: { query: myQueryText } });
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                            const myToolResult = `[Mock Search Result for "${myQueryText}"]: Data from a simulated external knowledge base.`;
+                            this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'search_tool', result: myToolResult });
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+
+                            const myAgentResponse = `Based on my analysis and the simulated search, I can tell you about: "${myQueryText}". ${myToolResult}`;
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_RESPONSE', { response: myAgentResponse });
+                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: "${myAgentResponse}"` });
+                        }
+                        break; 
+
+                    case 'AGENT_THOUGHT':
+                    case 'TOOL_CALL':
+                    case 'AGENT_RESPONSE':
+                        // These are typically messages from an agent to the coordinator,
+                        // which the coordinator might log, route, or use to update state.
+                        // For this demo, we just log them and might broadcast for visibility.
+                        this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
+                            senderName: mySendingClientInstance.myClientName,
+                            text: `[${myMsg.type}]: ${JSON.stringify(myMsg.payload)}`
+                        });
+                        break;
+                    case 'TOOL_RESULT':
+                        // Special handling for TOOL_RESULT to ensure full content or relevant info is broadcasted
+                        let broadcastTextPayload;
+                        try {
+                            const parsedResult = JSON.parse(myMsg.payload.result);
+                            if (myMsg.payload.toolName === 'dog_image' && parsedResult.message && typeof parsedResult.message === 'string' && parsedResult.message.startsWith('https://images.dog.ceo')) {
+                                // For dog_image tool result, the image is now broadcasted via a separate message type
+                                broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (JSON in agent's log)`;
+                            } else if (myMsg.payload.toolName === 'chuck_norris_joke' && parsedResult.value) {
+                                 broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (Joke: "${parsedResult.value}")`;
+                            } else {
+                                broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (full JSON in agent's log)`;
+                            }
+                        } catch (e) {
+                            broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.result.substring(0, 100)}... (truncated)`;
+                        }
+                        this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
+                            senderName: mySendingClientInstance.myClientName,
+                            text: broadcastTextPayload
+                        });
+                        break;
+
+                    case 'COORDINATOR_IMAGE_BROADCAST':
+                        // Coordinator sends this to all clients for image display
+                        // This case does not need to be explicitly handled by the coordinator's switch,
+                        // as the coordinator is the one sending it out.
+                        // It will be handled in the agent's myReceiveMessage.
+                        break;
+
+                    case 'AGENT_DISCONNECT':
+                        const myDisconnectedClientInfo = this.myClients.get(myMsg.senderId);
+                        if (myDisconnectedClientInfo) {
+                            this.myClients.delete(myMsg.senderId);
+                            this.myAddLog(`Agent ${myDisconnectedClientInfo.id} (${myDisconnectedClientInfo.name}) disconnected.`);
+                            this.myUpdateClientListAndNotify();
+                            this.myBroadcastMessageToClients('COORDINATOR_DISCONNECTED_AGENT', { agentId: myDisconnectedClientInfo.id, agentName: myDisconnectedClientInfo.name });
+                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: 'Coordinator', text: `${myDisconnectedClientInfo.name} has left the agent swarm.` });
+                        } else {
+                            this.myAddLog(`Unknown agent ${myMsg.senderId} attempted to disconnect.`);
+                        }
+                        break;
+
+                    case 'AGENT_PING': // Simple heartbeat response
+                        // this.myAddLog(`Agent ${myMsg.senderId} responded to ping.`);
+                        break;
+
+                    default:
+                        this.myAddLog(`Unknown message type received from agent ${myMsg.senderId}: ${myMsg.type}`);
+                        break;
+                }
+            }
+
+            myUpdateClientListAndNotify() {
+                this.myClientUpdateListeners.forEach(myListener => myListener());
+            }
+
+            myOnLog(myListener) {
+                this.myLogListeners.push(myListener);
+                return () => this.myLogListeners = this.myLogListeners.filter(myL => myL !== myListener);
+            }
+
+            myOnClientUpdate(myListener) {
+                this.myClientUpdateListeners.push(myListener);
+                return () => this.myClientUpdateListeners = this.myClientUpdateListeners.filter(myL => myL !== myListener);
+            }
+
+            myGetClients() {
+                return Array.from(this.myClients.values()).map(myC => ({ id: myC.id, name: myC.name, status: myC.status }));
+            }
+        }
+
+        // --- My Client-side Logic (LLM Agent) ---
+
+        class MyLLM_Agent {
+            myClientId;
+            myClientName = null;
+            myIsConnected = false;
+            myServer; // Reference to the single coordinator instance (optional, for standalone)
+            myLogs = [];
+            myConversationHistory = []; // Stores user queries, agent thoughts, tool calls/results, and agent responses
+            myLogListeners = [];
+            myConversationListeners = [];
+            myUiElements; // Reference to the dynamically created UI elements
+
+            constructor(myServerInstance, myUiElements) {
+                this.myServer = myServerInstance; // This can be null for a standalone agent
+                this.myUiElements = myUiElements;
+                this.myClientId = `agent-${Math.random().toString(36).substring(2, 9)}`;
+                this.myAddLog(`My Agent instance created with ID: ${this.myClientId}`);
+
+                // Event Listeners - Robustly check for element existence before binding using optional chaining
+                this.myUiElements.myConnectButton?.addEventListener('click', this.myHandleConnect);
+                this.myUiElements.myClientNameInput?.addEventListener('input', this.myUpdateUIForConnectionStatus);
+                this.myUiElements.myClientNameInput?.addEventListener('keydown', (myEvent) => {
+                    if (myEvent.key === 'Enter') {
+                        myEvent.preventDefault(); // Prevent new line on Enter
+                        this.myHandleConnect();
+                    }
+                });
+
+                this.myUiElements.mySendQueryButton?.addEventListener('click', this.myHandleSendQuery);
+                this.myUiElements.myQueryInput?.addEventListener('input', this.myUpdateUIForConnectionStatus);
+                this.myUiElements.myQueryInput?.addEventListener('keydown', (myEvent) => {
+                    if (myEvent.key === 'Enter') {
+                        myEvent.preventDefault(); // Prevent new line on Enter
+                        this.myHandleSendQuery();
+                    }
+                });
+                
+                this.myUpdateUIForConnectionStatus(); // Initial UI state
+            }
+
+            // Define methods as arrow functions to ensure 'this' context is bound to the instance
+            myAddLog = (myMessage) => {
+                const myTimestamp = new Date().toLocaleTimeString();
+                const myLogEntry = `[${myTimestamp}] AGENT (${this.myClientName || this.myClientId}): ${myMessage}`;
+                this.myLogs.push(myLogEntry);
+                // Ensure myClientLogsDiv exists before appending
+                if (this.myUiElements.myClientLogsDiv) {
+                    myAppendLog(this.myUiElements.myClientLogsDiv, myLogEntry);
+                }
+            }
+
+            // Called directly by the coordinator to send a message to this agent, or internally if standalone
+            myReceiveMessage = (myMsg) => {
+                this.myAddLog(`Received message (${myMsg.type}): ${JSON.stringify(myMsg.payload).substring(0, 50)}...`);
+
+                switch (myMsg.type) {
+                    case 'COORDINATOR_ACCEPTED_CONNECTION':
+                        this.myIsConnected = true;
+                        this.myClientName = myMsg.payload.assignedName;
+                        this.myAddLog(`Connection successful! Assigned name: ${this.myClientName}`);
+                        this.myConversationHistory.push({ type: 'system', text: `You are connected as ${this.myClientName}.` });
+                        this.myUpdateConversationUI();
+                        this.myUpdateUIForConnectionStatus();
+                        break;
+
+                    case 'COORDINATOR_REJECTED_CONNECTION':
+                        this.myIsConnected = false;
+                        this.myClientName = null;
+                        this.myAddLog(`Connection rejected: ${myMsg.payload.reason}`);
+                        this.myConversationHistory.push({ type: 'system', text: `Connection rejected: ${myMsg.payload.reason}` });
+                        this.myUpdateConversationUI();
+                        this.myUpdateUIForConnectionStatus();
+                        break;
+
+                    case 'COORDINATOR_BROADCAST_MESSAGE':
+                        // Display messages from other agents or coordinator
+                        this.myConversationHistory.push({
+                            type: 'broadcast',
+                            sender: myMsg.payload.senderName,
+                            text: myMsg.payload.text,
+                            timestamp: myMsg.timestamp
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+
+                    case 'COORDINATOR_IMAGE_BROADCAST':
+                        // Handle image broadcast from coordinator
+                        this.myConversationHistory.push({
+                            type: 'received_image',
+                            sender: myMsg.payload.senderName,
+                            imageUrl: myMsg.payload.imageUrl,
+                            timestamp: myMsg.timestamp
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+
+                    case 'AGENT_THOUGHT':
+                        this.myConversationHistory.push({ type: 'thought', text: myMsg.payload.thought, timestamp: myMsg.timestamp });
+                        this.myUpdateConversationUI();
+                        break;
+
+                    case 'TOOL_CALL':
+                        this.myConversationHistory.push({
+                            type: 'tool_call',
+                            toolName: myMsg.payload.toolName,
+                            parameters: JSON.stringify(myMsg.payload.parameters),
+                            timestamp: myMsg.timestamp
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+
+                    case 'TOOL_RESULT':
+                        this.myConversationHistory.push({
+                            type: 'tool_result',
+                            toolName: myMsg.payload.toolName,
+                            result: myMsg.payload.result,
+                            timestamp: myMsg.timestamp
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+
+                    case 'AGENT_RESPONSE':
+                        this.myConversationHistory.push({
+                            type: 'agent_response',
+                            response: myMsg.payload.response,
+                            timestamp: myMsg.timestamp
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+
+                    case 'COORDINATOR_DISCONNECTED_AGENT':
+                           // Only process if this agent is not the one disconnecting itself
+                        if (myMsg.payload.agentId !== this.myClientId) {
+                            this.myConversationHistory.push({ type: 'system', text: `${myMsg.payload.agentName} has left the agent swarm.` });
+                            this.myUpdateConversationUI();
+                        }
+                        break;
+
+                    case 'COORDINATOR_SHUTDOWN':
+                        if (this.myIsConnected) {
+                            this.myIsConnected = false;
+                            this.myClientName = null;
+                            this.myAddLog(`Coordinator disconnected: ${myMsg.payload.reason}`);
+                            this.myConversationHistory.push({ type: 'system', text: `Coordinator disconnected: ${myMsg.payload.reason}` });
+                            this.myUpdateConversationUI();
+                            this.myUpdateUIForConnectionStatus();
+                        }
+                        break;
+
+                    default:
+                        this.myAddLog(`Unhandled message type: ${myMsg.type}`);
+                        break;
+                }
+            }
+
+            // Sends a message to the coordinator instance directly OR handles it internally if standalone
+            mySendMessageToCoordinator = async (myType, myPayload) => {
+                this.myAddLog(`Sending message (type: ${myType}): ${JSON.stringify(myPayload).substring(0, 50)}...`);
+
+                // All agents now communicate with the central server
+                if (this.myServer) {
+                    const myMessage = {
+                        source: 'agent',
+                        senderId: this.myClientId,
+                        type: myType,
+                        targetId: 'coordinator',
+                        payload: myPayload,
+                        timestamp: new Date().toISOString()
+                    };
+                    this.myServer.myHandleIncomingClientMessage(myMessage, this);
+                } else {
+                    // This else block acts as a fallback or a truly isolated "fake" if myServer is explicitly null.
+                    // Given the new setup where myServerInstance is always passed, this block should rarely be hit
+                    // for 'AGENT_CONNECT' or 'USER_QUERY' unless there's an explicit design to have completely
+                    // isolated agents that don't interact with the coordinator at all.
+                    this.myAddLog(`(ERROR: No server instance for message type ${myType})`);
+                    // For now, we'll keep the direct API calls here as a failsafe/demonstration
+                    // if for some reason an agent is created without a server reference.
+                    if (myType === 'AGENT_CONNECT') {
+                        this.myReceiveMessage({
+                            type: 'COORDINATOR_ACCEPTED_CONNECTION',
+                            payload: { assignedName: myPayload.requestedName || this.myClientId }
+                        });
+                        return;
+                    }
+
+                    if (myType === 'USER_QUERY') {
+                        const myQueryText = myPayload.query.toLowerCase();
+                        let handledByApi = false;
+
+                        if (myQueryText.includes('dog')) {
+                            this.myReceiveMessage({ type: 'AGENT_THOUGHT', payload: { thought: 'Fetching a random dog image!' } });
+                            try {
+                                const response = await fetch('https://dog.ceo/api/breeds/image/random');
+                                const dogData = await response.json();
+                                const rawJson = JSON.stringify(dogData, null, 2);
+                                this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'dog_image', result: rawJson } });
+                                this.myReceiveMessage({ type: 'COORDINATOR_IMAGE_BROADCAST', payload: { imageUrl: dogData.message, senderName: this.myClientName || this.myClientId } });
+                                handledByApi = true;
+                            } catch (error) {
+                                this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'dog_image', result: `Error fetching dog image: ${error.message}` } });
+                                handledByApi = true;
+                            }
+                        }
+
+                        if (myQueryText.includes('tell a joke')) {
+                            this.myReceiveMessage({ type: 'AGENT_THOUGHT', payload: { thought: 'Time for a laugh... fetching a joke!' } });
+                            try {
+                                const response = await fetch('https://api.chucknorris.io/jokes/random');
+                                const jokeData = await response.json();
+                                const rawJson = JSON.stringify(jokeData, null, 2);
+                                this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'chuck_norris_joke', result: rawJson } });
+                                this.myReceiveMessage({ type: 'AGENT_RESPONSE', payload: { response: `Here's a Chuck Norris joke:\n\n${jokeData.value}` } });
+                                handledByApi = true;
+                            } catch (error) {
+                                this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'chuck_norris_joke', result: `Error fetching joke: ${error.message}` } });
+                                this.myReceiveMessage({ type: 'AGENT_RESPONSE', payload: { response: `I tried to fetch a joke, but something went wrong: ${error.message}` } });
+                                handledByApi = true;
+                            }
+                        }
+
+                        if (!handledByApi) {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            this.myReceiveMessage({ type: 'AGENT_THOUGHT', payload: { thought: 'Considering the user query and potential tools.' } });
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            this.myReceiveMessage({ type: 'TOOL_CALL', payload: { toolName: 'search_tool', parameters: { query: myQueryText } } });
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                            const myToolResult = `[Mock Search Result for "${myQueryText}"]: Data from a simulated external knowledge base.`;
+                            this.myReceiveMessage({ type: 'TOOL_RESULT', payload: { toolName: 'search_tool', result: myToolResult } });
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            const myAgentResponse = `Based on my analysis and the simulated search, I can tell you about: "${myQueryText}". ${myToolResult}`;
+                            this.myReceiveMessage({ type: 'AGENT_RESPONSE', payload: { response: myAgentResponse } });
+                        }
+                    }
+                }
+            }
+
+            myHandleConnect = async () => { // Defined as arrow function
+                const myName = this.myUiElements.myClientNameInput.value.trim();
+                if (myName) {
+                    this.myAddLog(`Attempting to connect as "${myName}"...`);
+                    // This will now always send to the coordinator
+                    await this.mySendMessageToCoordinator('AGENT_CONNECT', { requestedName: myName });
+                }
+            }
+
+            myHandleSendQuery = async () => { // Defined as arrow function
+                const myQuery = this.myUiElements.myQueryInput.value.trim();
+                if (myQuery) {
+                    // This agent sends a user query to the coordinator
+                    // The coordinator will handle API calls and broadcasting
+                    await this.mySendMessageToCoordinator('USER_QUERY', { query: myQuery });
+                    this.myConversationHistory.push({ sender: this.myClientName, text: `You (Agent): "${myQuery}"`, type: 'user_query' });
+                    this.myUpdateConversationUI();
+                    this.myUiElements.myQueryInput.value = '';
+                }
+                this.myUpdateUIForConnectionStatus(); // Re-evaluate disabled state for send button
+            }
+
+            myUpdateUIForConnectionStatus = () => { // Defined as arrow function
+                // Ensure elements exist before accessing their properties
+                const clientTitle = this.myUiElements.myClientTitle;
+                const connectionSection = this.myUiElements.myConnectionSection;
+                const conversationSection = this.myUiElements.myConversationSection;
+                const clientNameInput = this.myUiElements.myClientNameInput;
+                const connectButton = this.myUiElements.myConnectButton;
+                const sendQueryButton = this.myUiElements.mySendQueryButton;
+                const queryInput = this.myUiElements.myQueryInput;
+
+
+                if (clientTitle) {
+                    clientTitle.textContent = this.myIsConnected ? `My LLM Agent (${this.myClientName})` : `My LLM Agent (Not Connected)`;
+                }
+                if (connectionSection) {
+                    connectionSection.style.display = this.myIsConnected ? 'none' : 'block';
+                }
+                if (conversationSection) {
+                    conversationSection.style.display = this.myIsConnected ? 'block' : 'none';
+                }
+
+                if (clientNameInput) {
+                    clientNameInput.disabled = this.myIsConnected;
+                }
+                if (connectButton) {
+                    // Check if clientNameInput is available before accessing its value
+                    connectButton.disabled = this.myIsConnected || (clientNameInput ? !clientNameInput.value.trim() : true);
+                }
+                if (sendQueryButton) {
+                    // Check if queryInput is available before accessing its value
+                    sendQueryButton.disabled = !this.myIsConnected || (queryInput ? !queryInput.value.trim() : true);
+                }
+            }
+
+            myUpdateConversationUI = () => { // Defined as arrow function
+                if (!this.myUiElements.myClientConversationDiv) return; // Ensure conversation div exists
+
+                this.myUiElements.myClientConversationDiv.innerHTML = '';
+                this.myConversationHistory.forEach(myMsg => {
+                    const myP = document.createElement('p');
+                    myP.classList.add('my-message');
+                    const myTimestampStr = new Date(myMsg.timestamp || Date.now()).toLocaleTimeString();
+
+                    switch (myMsg.type) {
+                        case 'system':
+                            myP.classList.add('my-system-message');
+                            myP.textContent = myMsg.text;
+                            break;
+                        case 'user_query':
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> ${myMsg.text} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'broadcast':
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> ${myMsg.text} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'received_image':
+                            myP.classList.add('my-received-image');
+                            const img = document.createElement('img');
+                            img.src = myMsg.imageUrl;
+                            img.alt = `Image from ${myMsg.sender}`;
+                            img.onerror = () => {
+                                img.src = 'https://placehold.co/300x200/cccccc/333333?text=Image+Load+Error';
+                                img.alt = 'Image Load Error';
+                            };
+                            myP.innerHTML = `<span class="my-sender">${myMsg.sender}:</span> Shared an image! <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            myP.appendChild(img);
+                            break;
+                        case 'thought':
+                            myP.classList.add('my-agent-thought');
+                            myP.innerHTML = `<em>Agent Thought: ${myMsg.text}</em> <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'tool_call':
+                            myP.classList.add('my-tool-call');
+                            myP.innerHTML = `<strong>Tool Call: ${myMsg.toolName}(${myMsg.parameters})</strong> <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        case 'tool_result':
+                            myP.classList.add('my-tool-result');
+                            myP.innerHTML = `<pre>${myMsg.result}</pre>`; // For tool results, display raw JSON
+                            break;
+                        case 'agent_response':
+                            myP.innerHTML = `<span class="my-sender">Agent Final Response:</span> ${myMsg.response} <span style="color: gray; font-size: 0.8em; margin-left: 5px;">(${myTimestampStr})</span>`;
+                            break;
+                        default:
+                            myP.textContent = JSON.stringify(myMsg);
+                            break;
+                    }
+                    this.myUiElements.myClientConversationDiv.appendChild(myP);
+                });
+                this.myUiElements.myClientConversationDiv.scrollTop = this.myUiElements.myClientConversationDiv.scrollHeight;
+            }
+        }
+
+        // --- My Global DOM Utilities & Application Setup ---
+
+        let myServerInstance;
+        const myClientsContainer = document.getElementById('my-clients-container');
+        const myServerLogsDiv = document.getElementById('my-server-logs');
+        const myClientListDiv = document.getElementById('my-client-list');
+        const myConnectedClientsCountSpan = document.getElementById('my-connected-clients-count');
+        const mySpawnClientButton = document.getElementById('my-spawn-client-button');
+        const myLoadFakeLLMButton = document.getElementById('my-load-fake-llm-button');
+
+
+        function myUpdateServerClientList() {
+            myClientListDiv.innerHTML = '';
+            const myClients = myServerInstance.myGetClients();
+            if (myClients.length === 0) {
+                const myP = document.createElement('p');
+                myP.style.color = 'gray';
+                myP.style.fontStyle = 'italic';
+                myP.textContent = 'No agents connected yet.';
+                myClientListDiv.appendChild(myP);
+            } else {
+                myClients.forEach(myClient => {
+                    const myP = document.createElement('p');
+                    myP.classList.add('my-client-item');
+                    myP.innerHTML = `<strong>${myClient.name}</strong> (ID: ${myClient.id.substring(0, 8)}...) - Status: ${myClient.status}`;
+                    myClientListDiv.appendChild(myP);
+                });
+            }
+            myConnectedClientsCountSpan.textContent = myClients.length;
+        }
+
+        function myCreateClientPanelAndInstance(isFake = false) {
+            // 1. Create HTML elements for the new client panel
+            const myPanel = document.createElement('div');
+            myPanel.classList.add('my-client-panel');
+            const myClientIdSuffix = Math.random().toString(36).substring(2, 9); // Unique ID suffix for panel and its elements
+
+            myPanel.innerHTML = `
+                <h2 id="my-client-title-${myClientIdSuffix}">My LLM Agent (${isFake ? 'Fake/Inline' : 'Not Connected'})</h2>
+                <div id="my-connection-section-${myClientIdSuffix}">
+                    <h3>Connect to Coordinator</h3>
+                    <input type="text" id="my-client-name-input-${myClientIdSuffix}" placeholder="Enter agent name">
+                    <button id="my-connect-button-${myClientIdSuffix}" class="my-connect-button">Connect</button>
+                </div>
+                <div id="my-conversation-section-${myClientIdSuffix}" style="display: none;">
+                    <h3>My Conversation</h3>
+                    <div id="my-client-conversation-div-${myClientIdSuffix}" class="my-conversation-box"></div>
+                    <input type="text" id="my-query-input-${myClientIdSuffix}" placeholder="Type your query for the agent">
+                    <button id="my-send-query-button-${myClientIdSuffix}" class="my-send-button">Send Query</button>
+                </div>
+                <h3>My Agent Logs</h3>
+                <div id="my-client-logs-${myClientIdSuffix}" class="my-log-box"></div>
+            `;
+            myClientsContainer.appendChild(myPanel);
+
+            // 2. Get references to the newly created UI elements
+            const myUiElements = {
+                myClientTitle: myPanel.querySelector(`#my-client-title-${myClientIdSuffix}`),
+                myConnectionSection: myPanel.querySelector(`#my-connection-section-${myClientIdSuffix}`),
+                myClientNameInput: myPanel.querySelector(`#my-client-name-input-${myClientIdSuffix}`),
+                myConnectButton: myPanel.querySelector(`#my-connect-button-${myClientIdSuffix}`),
+                myConversationSection: myPanel.querySelector(`#my-conversation-section-${myClientIdSuffix}`),
+                myClientConversationDiv: myPanel.querySelector(`#my-client-conversation-div-${myClientIdSuffix}`),
+                myQueryInput: myPanel.querySelector(`#my-query-input-${myClientIdSuffix}`),
+                mySendQueryButton: myPanel.querySelector(`#my-send-query-button-${myClientIdSuffix}`),
+                myClientLogsDiv: myPanel.querySelector(`#my-client-logs-${myClientIdSuffix}`)
+            };
+
+            // 3. Instantiate a new MyLLM_Agent, always passing the coordinator instance
+            new MyLLM_Agent(myServerInstance, myUiElements);
+        }
+
+        // Initialize on window load
+        window.onload = function() {
+            myServerInstance = new MyAgentCoordinator();
+
+            myServerInstance.myOnLog((myLog) => {
+                myAppendLog(myServerLogsDiv, myLog);
+            });
+
+            myServerInstance.myOnClientUpdate(() => {
+                myUpdateServerClientList();
+            });
+
+            mySpawnClientButton.addEventListener('click', () => myCreateClientPanelAndInstance(false)); // Regular agent
+            
+            myLoadFakeLLMButton.addEventListener('click', () => myCreateClientPanelAndInstance(true)); // Fake agent
+
+
+            myUpdateServerClientList(); // Initial list update
+        };
+    </script>
+</body>
+</html>
