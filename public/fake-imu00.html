@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake TinyML IMU Device</title>
+    <style>
+        /* Minimal CSS for basic layout and readability */
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        .my-imu-panel {
+            min-width: 300px;
+            max-width: 450px;
+            display: flex;
+            flex-direction: column;
+            margin: 0 auto; /* Center the panel */
+        }
+        .my-log-box, .my-conversation-box, .my-imu-data-box {
+            resize: vertical;
+            overflow: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            height: 150px; /* Consistent height for all display boxes */
+        }
+        input[type="text"] {
+            width: calc(100% - 22px); /* Account for padding */
+            box-sizing: border-box; /* Include padding in width */
+            display: block;
+            margin-bottom: 10px;
+        }
+        button {
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+            margin-bottom: 5px; /* Spacing between buttons */
+        }
+        .my-message .my-sender {
+            font-weight: bold;
+        }
+        .my-system-message {
+            font-style: italic;
+        }
+        .my-imu-broadcast {
+            font-weight: bold;
+            color: #0056b3; /* A distinct color for IMU data */
+        }
+        .my-agent-thought {
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div id="my-fake-imu-panel" class="my-imu-panel">
+        <h2 id="my-imu-title">Fake TinyML IMU Device</h2>
+
+        <div id="my-connection-section">
+            <h3>Connect to Coordinator (Simulated)</h3>
+            <input type="text" id="my-imu-name-input" placeholder="Enter device name (e.g., IMU-01)">
+            <button id="my-imu-connect-button">Connect</button>
+        </div>
+
+        <div id="my-controls-section" style="display: none;">
+            <h3>IMU Broadcasts</h3>
+            <div id="my-imu-data-display" class="my-imu-data-box"></div>
+            <button id="my-start-imu-button">Start IMU Broadcast</button>
+            <button id="my-stop-imu-button" disabled>Stop IMU Broadcast</button>
+
+            <h3>Chat with MCP Server</h3>
+            <div id="my-imu-conversation-div" class="my-conversation-box"></div>
+            <input type="text" id="my-imu-query-input" placeholder="Type your query for the server">
+            <button id="my-imu-send-query-button">Send Query</button>
+        </div>
+
+        <h3>Device Logs</h3>
+        <div id="my-imu-logs" class="my-log-box"></div>
+    </div>
+
+    <script type="module">
+        // Helper function for appending logs to a specific element
+        window.myAppendLog = function(myElement, myMessage) {
+            const myP = document.createElement('p');
+            myP.textContent = myMessage;
+            myElement.appendChild(myP);
+            myElement.scrollTop = myElement.scrollHeight;
+        }
+
+        // --- My IMU Device Agent Logic ---
+        // This class simulates an IMU device and its interaction with a conceptual MCP server.
+        class MyIMU_Agent {
+            myClientId;
+            myClientName = null;
+            myIsConnected = false;
+            myLogs = [];
+            myConversationHistory = []; // Stores user chat and simulated broadcasts
+            myUiElements;
+            myImuIntervalId = null; // To store the interval for IMU data broadcasting
+
+            // Predefined activity labels for IMU simulation
+            myActivityLabels = [
+                'other', 'standing', 'sitting', 'lying down (any direction)',
+                'walking', 'jogging', 'running', 'sprinting'
+            ];
+
+            constructor(myUiElements) {
+                this.myUiElements = myUiElements;
+                this.myClientId = `imu-device-${Math.random().toString(36).substring(2, 9)}`;
+                this.myAddLog(`Fake IMU Device instance created with ID: ${this.myClientId}`);
+
+                // Event Listeners for UI elements
+                this.myUiElements.myImuConnectButton?.addEventListener('click', this.myHandleConnect);
+                this.myUiElements.myImuNameInput?.addEventListener('input', this.myUpdateUIForConnectionStatus);
+                this.myUiElements.myImuNameInput?.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); this.myHandleConnect(); }
+                });
+
+                this.myUiElements.myStartImuButton?.addEventListener('click', this.startIMUBroadcast);
+                this.myUiElements.myStopImuButton?.addEventListener('click', this.stopIMUBroadcast);
+
+                this.myUiElements.myImuSendQueryButton?.addEventListener('click', this.myHandleSendQuery);
+                this.myUiElements.myImuQueryInput?.addEventListener('input', this.myUpdateUIForConnectionStatus);
+                this.myUiElements.myImuQueryInput?.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); this.myHandleSendQuery(); }
+                });
+                
+                this.myUpdateUIForConnectionStatus(); // Set initial UI state
+            }
+
+            // Adds a log entry to the device's log and updates its UI log box
+            myAddLog = (message) => {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = `[${timestamp}] IMU Device (${this.myClientName || this.myClientId}): ${message}`;
+                this.myLogs.push(logEntry);
+                if (this.myUiElements.myImuLogsDiv) {
+                    window.myAppendLog(this.myUiElements.myImuLogsDiv, logEntry);
+                }
+            }
+
+            // Simulates receiving a message from a conceptual coordinator
+            myReceiveMessage = (msg) => {
+                this.myAddLog(`Received simulated message (${msg.type}): ${JSON.stringify(msg.payload).substring(0, 50)}...`);
+
+                switch (msg.type) {
+                    case 'COORDINATOR_ACCEPTED_CONNECTION':
+                        this.myIsConnected = true;
+                        this.myClientName = msg.payload.assignedName;
+                        this.myAddLog(`Connection successful! Assigned name: ${this.myClientName}`);
+                        this.myConversationHistory.push({ type: 'system', text: `Connected as ${this.myClientName}.` });
+                        this.myUpdateConversationUI();
+                        this.myUpdateUIForConnectionStatus();
+                        break;
+                    case 'AGENT_RESPONSE': // Simulated response to a query
+                        this.myConversationHistory.push({
+                            type: 'agent_response',
+                            response: msg.payload.response,
+                            timestamp: msg.timestamp
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+                    case 'COORDINATOR_BROADCAST_MESSAGE': // Other simulated agent's broadcast
+                        this.myConversationHistory.push({
+                            type: 'broadcast',
+                            sender: msg.payload.senderName,
+                            text: msg.payload.text,
+                            timestamp: msg.timestamp
+                        });
+                        this.myUpdateConversationUI();
+                        break;
+                    default:
+                        this.myAddLog(`Unhandled simulated message type: ${msg.type}`);
+                        break;
+                }
+            }
+
+            // Simulates sending a message to a conceptual coordinator
+            mySendMessageToCoordinator = async (type, payload) => {
+                this.myAddLog(`Simulating send to coordinator (${type}): ${JSON.stringify(payload).substring(0, 50)}...`);
+
+                const message = {
+                    source: 'agent',
+                    senderId: this.myClientId,
+                    type: type,
+                    targetId: 'coordinator', // Targeting the conceptual coordinator
+                    payload: payload,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Simulate coordinator processing/response
+                if (type === 'AGENT_CONNECT') {
+                    // Simulate immediate acceptance
+                    this.myReceiveMessage({
+                        type: 'COORDINATOR_ACCEPTED_CONNECTION',
+                        payload: { assignedName: payload.requestedName || this.myClientId }
+                    });
+                } else if (type === 'USER_QUERY') {
+                    // Simulate a simple LLM response from the coordinator
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+                    this.myReceiveMessage({
+                        type: 'AGENT_RESPONSE',
+                        payload: { response: `(Simulated Server): I received your query "${payload.query}". I'm a fake server, so I'll just echo that.` },
+                        timestamp: new Date().toISOString()
+                    });
+                } else if (type === 'IMU_DATA_BROADCAST') {
+                    // Simulate the coordinator broadcasting the IMU data to other (conceptual) agents
+                    this.myConversationHistory.push({
+                        type: 'imu_broadcast',
+                        sender: this.myClientName || this.myClientId,
+                        activity: payload.activity,
+                        duration: payload.duration,
+                        timestamp: message.timestamp
+                    });
+                    this.myUiElements.myImuDataDisplay.innerHTML += `<p class="my-imu-broadcast">Sent IMU: ${payload.activity} for ${payload.duration}s</p>`;
+                    this.myUiElements.myImuDataDisplay.scrollTop = this.myUiElements.myImuDataDisplay.scrollHeight;
+                }
+            }
+
+            // Handles the 'Connect' button click
+            myHandleConnect = async () => {
+                const name = this.myUiElements.myImuNameInput.value.trim();
+                if (name) {
+                    this.myAddLog(`Attempting to connect as "${name}"...`);
+                    await this.mySendMessageToCoordinator('AGENT_CONNECT', { requestedName: name });
+                }
+            }
+
+            // Handles the 'Send Query' button click or Enter key press in query input
+            myHandleSendQuery = async () => {
+                const query = this.myUiElements.myImuQueryInput.value.trim();
+                if (query) {
+                    this.myConversationHistory.push({ sender: this.myClientName, text: `You (IMU Device): "${query}"`, type: 'user_query' });
+                    this.myUpdateConversationUI();
+                    await this.mySendMessageToCoordinator('USER_QUERY', { query: query });
+                    this.myUiElements.myImuQueryInput.value = ''; // Clear input
+                }
+                this.myUpdateUIForConnectionStatus();
+            }
+
+            // Generates a random activity from the predefined list
+            generateRandomActivity = () => {
+                const randomIndex = Math.floor(Math.random() * this.myActivityLabels.length);
+                return this.myActivityLabels[randomIndex];
+            }
+
+            // Generates a random duration between 10 seconds and 8 hours (28800 seconds)
+            generateRandomDuration = () => {
+                const minSeconds = 10;
+                const maxSeconds = 8 * 60 * 60; // 8 hours in seconds
+                return Math.floor(Math.random() * (maxSeconds - minSeconds + 1)) + minSeconds;
+            }
+
+            // Starts broadcasting IMU data at a random interval
+            startIMUBroadcast = () => {
+                if (!this.myIsConnected) {
+                    this.myAddLog("Not connected to coordinator. Cannot start IMU broadcast.");
+                    return;
+                }
+                if (this.myImuIntervalId !== null) {
+                    this.myAddLog("IMU broadcast already running.");
+                    return;
+                }
+
+                this.myAddLog("Starting IMU data broadcast...");
+                // Broadcast every 5 seconds for demo purposes. In real-world, this would vary.
+                this.myImuIntervalId = setInterval(this.sendIMUData, 5000);
+                this.myUiElements.myStartImuButton.disabled = true;
+                this.myUiElements.myStopImuButton.disabled = false;
+            }
+
+            // Stops broadcasting IMU data
+            stopIMUBroadcast = () => {
+                if (this.myImuIntervalId !== null) {
+                    clearInterval(this.myImuIntervalId);
+                    this.myImuIntervalId = null;
+                    this.myAddLog("Stopped IMU data broadcast.");
+                    this.myUiElements.myStartImuButton.disabled = false;
+                    this.myUiElements.myStopImuButton.disabled = true;
+                }
+            }
+
+            // Generates and sends a single IMU data broadcast
+            sendIMUData = async () => {
+                const activity = this.generateRandomActivity();
+                const duration = this.generateRandomDuration(); // Duration in seconds
+                this.myAddLog(`Broadcasting IMU data: Activity='${activity}', Duration=${duration}s`);
+
+                await this.mySendMessageToCoordinator('IMU_DATA_BROADCAST', {
+                    activity: activity,
+                    duration: duration
+                });
+            }
+
+            // Updates the UI elements' states based on connection status and input values
+            myUpdateUIForConnectionStatus = () => {
+                const { myImuTitle, myConnectionSection, myControlsSection, myImuNameInput, myImuConnectButton, myImuSendQueryButton, myImuQueryInput, myStartImuButton, myStopImuButton } = this.myUiElements;
+
+                if (myImuTitle) {
+                    myImuTitle.textContent = this.myIsConnected ? `Fake TinyML IMU Device (${this.myClientName})` : `Fake TinyML IMU Device`;
+                }
+                if (myConnectionSection) {
+                    myConnectionSection.style.display = this.myIsConnected ? 'none' : 'block';
+                }
+                if (myControlsSection) {
+                    myControlsSection.style.display = this.myIsConnected ? 'block' : 'none';
+                }
+
+                if (myImuNameInput) {
+                    myImuNameInput.disabled = this.myIsConnected;
+                }
+                if (myImuConnectButton) {
+                    myImuConnectButton.disabled = this.myIsConnected || (myImuNameInput ? !myImuNameInput.value.trim() : true);
+                }
+                if (myImuSendQueryButton) {
+                    myImuSendQueryButton.disabled = !this.myIsConnected || (myImuQueryInput ? !myImuQueryInput.value.trim() : true);
+                }
+
+                // IMU control buttons
+                if (myStartImuButton) {
+                    myStartImuButton.disabled = !this.myIsConnected || (this.myImuIntervalId !== null);
+                }
+                if (myStopImuButton) {
+                    myStopImuButton.disabled = !this.myIsConnected || (this.myImuIntervalId === null);
+                }
+            }
+
+            // Updates the conversation display area
+            myUpdateConversationUI = () => {
+                const conversationDiv = this.myUiElements.myImuConversationDiv;
+                if (!conversationDiv) return;
+
+                conversationDiv.innerHTML = '';
+                this.myConversationHistory.forEach(msg => {
+                    const p = document.createElement('p');
+                    p.classList.add('my-message');
+                    const timestampStr = new Date(msg.timestamp || Date.now()).toLocaleTimeString();
+
+                    switch (msg.type) {
+                        case 'system':
+                            p.classList.add('my-system-message');
+                            p.textContent = msg.text;
+                            break;
+                        case 'user_query':
+                            p.innerHTML = `<span class="my-sender">${msg.sender}:</span> ${msg.text} (${timestampStr})`;
+                            break;
+                        case 'broadcast':
+                            p.innerHTML = `<span class="my-sender">${msg.sender}:</span> ${msg.text} (${timestampStr})`;
+                            break;
+                        case 'imu_broadcast':
+                            p.classList.add('my-imu-broadcast');
+                            p.innerHTML = `<span class="my-sender">IMU Broadcast:</span> Activity: ${msg.activity}, Duration: ${msg.duration}s (${timestampStr})`;
+                            break;
+                        case 'agent_response':
+                            p.innerHTML = `<span class="my-sender">Server Response:</span> ${msg.response} (${timestampStr})`;
+                            break;
+                        default:
+                            p.textContent = JSON.stringify(msg);
+                            break;
+                    }
+                    conversationDiv.appendChild(p);
+                });
+                conversationDiv.scrollTop = conversationDiv.scrollHeight;
+            }
+        }
+
+        // --- Application Setup for Fake IMU Device ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const myUiElements = {
+                myImuTitle: document.getElementById('my-imu-title'),
+                myConnectionSection: document.getElementById('my-connection-section'),
+                myImuNameInput: document.getElementById('my-imu-name-input'),
+                myImuConnectButton: document.getElementById('my-imu-connect-button'),
+                myControlsSection: document.getElementById('my-controls-section'),
+                myImuDataDisplay: document.getElementById('my-imu-data-display'),
+                myStartImuButton: document.getElementById('my-start-imu-button'),
+                myStopImuButton: document.getElementById('my-stop-imu-button'),
+                myImuConversationDiv: document.getElementById('my-imu-conversation-div'),
+                myImuQueryInput: document.getElementById('my-imu-query-input'),
+                myImuSendQueryButton: document.getElementById('my-imu-send-query-button'),
+                myImuLogsDiv: document.getElementById('my-imu-logs')
+            };
+
+            // Initialize the IMU agent
+            new MyIMU_Agent(myUiElements);
+        });
+    </script>
+</body>
+</html>
