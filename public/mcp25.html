@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Context Protocol Server with LLM Agents and IMU Device</title>
+    <!-- MathJax for rendering math, loaded globally as per the original LLM code -->
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0-alpha.1/es5/tex-mml-chtml.js"></script>
+    <style>
+        /* Essential CSS for basic layout and readability - No Tailwind CSS */
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        .my-main-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+        .my-server-panel {
+            flex: 1;
+            min-width: 350px;
+            display: flex;
+            flex-direction: column;
+        }
+        .my-clients-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            flex: 2;
+            min-width: 350px;
+        }
+        .my-client-panel {
+            flex: 1;
+            min-width: 300px;
+            max-width: 450px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .my-log-box, .my-client-list-box, .my-conversation-box, .my-imu-data-box {
+            resize: vertical;
+            overflow: auto;
+            border: 1px solid #ccc; /* Added border for visibility */
+            padding: 10px; /* Added padding */
+            height: 150px; /* Consistent height for logs/conversation */
+            margin-bottom: 10px; /* Spacing below boxes */
+            background-color: white;
+            border-radius: 4px;
+        }
+        textarea, input[type="text"], input[type="number"] {
+            width: calc(100% - 22px); /* Account for padding and border */
+            box-sizing: border-box; /* Include padding in width */
+            display: block;
+            margin-bottom: 10px;
+            padding: 8px; /* Added padding */
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+            margin-bottom: 5px; /* Spacing between buttons */
+            padding: 10px 12px; /* Added padding */
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        /* Specific styles for different message types in conversation */
+        .my-message .my-sender {
+            font-weight: bold;
+        }
+        .my-system-message {
+            font-style: italic;
+            color: #888;
+        }
+        .my-imu-broadcast {
+            font-weight: bold;
+            color: #0056b3; /* A distinct color for IMU data */
+        }
+        .my-agent-thought {
+            font-style: italic;
+            color: #555;
+        }
+        .my-tool-call {
+            font-weight: bold;
+            color: #b300b3;
+        }
+        .my-tool-result {
+            color: #009900;
+        }
+        .my-received-image img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+
+        .my-llm-section {
+            border-top: 1px dashed #ccc;
+            padding-top: 15px;
+            margin-top: 15px;
+        }
+        .my-llm-section h3 {
+            margin-top: 0;
+        }
+        .my-llm-section textarea {
+            min-height: 80px;
+        }
+        .my-llm-section .my-math-output {
+            font-size: 1.2em;
+            border: 1px solid #eee;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 4px;
+            min-height: 50px;
+        }
+        .my-llm-section details {
+            margin-top: 10px;
+            margin-bottom: 10px;
+            background-color: #eef;
+            border: 1px solid #dde;
+            border-radius: 4px;
+            padding: 5px 10px;
+        }
+        .my-llm-section summary {
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .my-llm-section details > div {
+            padding-top: 10px;
+        }
+        .my-llm-section label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+
+        @media (max-width: 1024px) {
+            .my-main-container { flex-direction: column; }
+            .my-server-panel, .my-clients-container { min-width: unset; flex: none; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="my-main-container">
+        <!-- Server Panel (Agent Coordinator) -->
+        <div id="my-server-panel" class="my-server-panel">
+            <h2>Model Context Protocol (MCP Server) for client-side AI- Agents</h2>
+            <p>Note: This is a client-side simulation. For a multi-user application, a Node.js WebSocket backend would be required.</p>
+            <button id="my-spawn-client-button" class="my-spawn-button" onclick="myCreateClientPanelAndInstance(false)">Spawn MCP chat</button>
+            <button id="my-load-fake-llm-button" class="my-spawn-button" onclick="myCreateClientPanelAndInstance(true)">Load Fake LLM (inline)</button>
+            <button id="my-load-fake-imu-button" class="my-spawn-button" onclick="myCreateIMUDevicePanelAndInstance()">Load Fake IMU Device (Inline)</button>
+
+            <h3>My Connected Agents (<span id="my-connected-clients-count">0</span>)</h3>
+            <div id="my-client-list" class="my-client-list-box">
+                <p>No agents connected yet.</p>
+            </div>
+            <h3>My Coordinator Logs</h3>
+            <div id="my-server-logs" class="my-log-box"></div>
+        </div>
+
+        <!-- Clients Container (where new agent panels will be added) -->
+        <div id="my-clients-container" class="my-clients-container">
+            <!-- LLM Agent and IMU Device panels will be dynamically inserted here -->
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the agent classes from their respective modules
+        import { MyLLM_Agent } from './llm-agent.js';
+        import { MyIMU_Agent } from './imu-agent.js';
+
+        // Helper function for appending logs to a specific element, exposed globally
+        window.myAppendLog = function(myElement, myMessage) {
+            const myP = document.createElement('p');
+            myP.textContent = myMessage;
+            myElement.appendChild(myP);
+            myElement.scrollTop = myElement.scrollHeight;
+        }
+
+        // --- Message Structure (Model Context Protocol) ---
+        // Defines the structure of messages exchanged between coordinator and agents.
+        // type: string, representing the MCP message type (e.g., 'AGENT_CONNECT', 'USER_QUERY', 'IMU_DATA_BROADCAST', etc.)
+        // source: 'coordinator' or 'agent'
+        // senderId: unique ID of the sender ('coordinator', or 'agent-xyz'/'imu-xyz')
+        // targetId: 'broadcast' for all, or a specific agent ID for targeted messages
+        // payload: object, data specific to the message type
+        // timestamp: ISO string of when the message was sent
+
+        // --- Server-side Logic (Agent Coordinator) ---
+        // Manages connections, routes messages, and handles API calls for all agents.
+        class MyAgentCoordinator {
+            myClients = new Map(); // Stores agentId -> { agentInstance, name, status }
+            myLogs = [];
+            myLogListeners = [];
+            myClientUpdateListeners = [];
+
+            constructor() {
+                this.myAddLog('My Agent Coordinator started (simulated).');
+            }
+
+            // Adds a log entry to the coordinator's log and notifies listeners
+            myAddLog(myMessage) {
+                const myTimestamp = new Date().toLocaleTimeString();
+                const myLogEntry = `[${myTimestamp}] COORDINATOR: ${myMessage}`;
+                this.myLogs.push(myLogEntry);
+                this.myLogListeners.forEach(myListener => myListener(myLogEntry));
+            }
+
+            // Sends a message directly to a specific agent instance
+            mySendMessageToClient(myTargetClientInstance, myType, myPayload) {
+                const myMessage = {
+                    source: 'coordinator',
+                    senderId: 'coordinator',
+                    type: myType,
+                    targetId: myTargetClientInstance.myClientId,
+                    payload: myPayload,
+                    timestamp: new Date().toISOString()
+                };
+                // Directly calls the agent's message handling method
+                myTargetClientInstance.myReceiveMessage(myMessage);
+            }
+
+            // Broadcasts a message to all currently connected agent instances
+            myBroadcastMessageToClients(myType, myPayload) {
+                const myMessage = {
+                    source: 'coordinator',
+                    senderId: 'coordinator',
+                    type: myType,
+                    targetId: 'broadcast',
+                    payload: myPayload,
+                    timestamp: new Date().toISOString()
+                };
+                this.myClients.forEach(myClientInfo => {
+                    myClientInfo.agentInstance.myReceiveMessage(myMessage);
+                });
+            }
+
+            // Handles incoming messages from agents (LLM or IMU)
+            async myHandleIncomingClientMessage(myMsg, mySendingClientInstance) {
+                if (myMsg.source !== 'agent') {
+                    this.myAddLog('Received non-agent message, ignoring.');
+                    return;
+                }
+
+                this.myAddLog(`Received message from agent ${myMsg.senderId} (${myMsg.type})`);
+
+                switch (myMsg.type) {
+                    case 'AGENT_CONNECT':
+                        const myRequestedName = myMsg.payload.requestedName;
+                        const myAgentNameTaken = Array.from(this.myClients.values()).some(myC => myC.name === myRequestedName);
+
+                        if (myAgentNameTaken) {
+                            this.myAddLog(`Connection rejected for ${myMsg.senderId}: Name "${myRequestedName}" is already taken.`);
+                            this.mySendMessageToClient(mySendingClientInstance, 'COORDINATOR_REJECTED_CONNECTION', { reason: `Name "${myRequestedName}" is already taken.` });
+                        } else {
+                            const myNewClientInfo = {
+                                id: myMsg.senderId,
+                                agentInstance: mySendingClientInstance, // Store reference to the agent instance
+                                name: myRequestedName || myMsg.senderId,
+                                status: 'connected'
+                            };
+                            this.myClients.set(myMsg.senderId, myNewClientInfo);
+                            this.myAddLog(`Agent ${myNewClientInfo.id} (${myNewClientInfo.name}) connected.`);
+                            this.mySendMessageToClient(mySendingClientInstance, 'COORDINATOR_ACCEPTED_CONNECTION', { assignedName: myNewClientInfo.name });
+                            this.myUpdateClientListAndNotify();
+                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: 'Coordinator', text: `${myNewClientInfo.name} has joined the swarm.` });
+                        }
+                        break;
+
+                    case 'USER_QUERY':
+                        const myQueryText = myMsg.payload.query.toLowerCase();
+                        let handledByApi = false;
+
+                        this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
+                            senderName: mySendingClientInstance.myClientName,
+                            text: `Query: "${myQueryText}" (processing...)`
+                        });
+
+                        // Simulate API calls based on query keywords
+                        if (myQueryText.includes('dog')) {
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Fetching a random dog image!' });
+                            try {
+                                const response = await fetch('https://dog.ceo/api/breeds/image/random');
+                                const dogData = await response.json();
+                                const rawJson = JSON.stringify(dogData, null, 2);
+
+                                this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'dog_image', result: rawJson });
+                                this.myBroadcastMessageToClients('COORDINATOR_IMAGE_BROADCAST', { imageUrl: dogData.message, senderName: mySendingClientInstance.myClientName });
+                                handledByApi = true;
+                            } catch (error) {
+                                console.error('Failed to fetch dog image:', error);
+                                this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'dog_image', result: `Error fetching dog image: ${error.message}` });
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Error fetching dog image: ${error.message}` });
+                                handledByApi = true;
+                            }
+                        }
+
+                        if (myQueryText.includes('tell a joke')) {
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Time for a laugh... fetching a joke!' });
+                            try {
+                                const response = await fetch('https://api.chucknorris.io/jokes/random');
+                                const jokeData = await response.json();
+                                const rawJson = JSON.stringify(jokeData, null, 2);
+
+                                this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'chuck_norris_joke', result: rawJson });
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Here's a Chuck Norris joke: "${jokeData.value}"` });
+                                handledByApi = true;
+                            } catch (error) {
+                                console.error('Failed to fetch joke:', error);
+                                this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'chuck_norris_joke', result: `Error fetching joke: ${error.message}` });
+                                this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: Error fetching joke: ${error.message}` });
+                                handledByApi = true;
+                            }
+                        }
+
+                        // Fallback to simulated search if no specific API was triggered
+                        if (!handledByApi) {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Considering the user query and potential tools.' });
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+
+                            this.mySendMessageToClient(mySendingClientInstance, 'TOOL_CALL', { toolName: 'search_tool', parameters: { query: myQueryText } });
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                            const myToolResult = `[Mock Search Result for "${myQueryText}"]: Data from a simulated external knowledge base.`;
+                            this.mySendMessageToClient(mySendingClientInstance, 'TOOL_RESULT', { toolName: 'search_tool', result: myToolResult });
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+
+                            const myAgentResponse = `Based on my analysis and the simulated search, I can tell you about: "${myQueryText}". ${myToolResult}`;
+                            this.mySendMessageToClient(mySendingClientInstance, 'AGENT_RESPONSE', { response: myAgentResponse });
+                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: mySendingClientInstance.myClientName, text: `Response: "${myAgentResponse}"` });
+                        }
+                        break; 
+                    
+                    case 'IMU_DATA_BROADCAST':
+                        // Use payload's senderName if provided, otherwise fall back to agent instance's name
+                        const actualSenderName = myMsg.payload.senderName || mySendingClientInstance.name;
+                        this.myAddLog(`Broadcasting IMU data from: ${actualSenderName} (ID: ${mySendingClientInstance.myClientId})`);
+
+                        this.myBroadcastMessageToClients('COORDINATOR_IMU_BROADCAST', {
+                            senderId: myMsg.senderId,
+                            senderName: actualSenderName, 
+                            activity: myMsg.payload.activity,
+                            duration: myMsg.payload.duration
+                        });
+                        break;
+
+                    case 'AGENT_THOUGHT':
+                    case 'TOOL_CALL':
+                    case 'AGENT_RESPONSE':
+                        // Log and broadcast agent's internal messages for visibility
+                        this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
+                            senderName: mySendingClientInstance.myClientName,
+                            text: `[${myMsg.type}]: ${JSON.stringify(myMsg.payload)}`
+                        });
+                        break;
+                    case 'TOOL_RESULT':
+                        // Special handling for TOOL_RESULT to ensure full content or relevant info is broadcasted
+                        let broadcastTextPayload;
+                        try {
+                            const parsedResult = JSON.parse(myMsg.payload.result);
+                            if (myMsg.payload.toolName === 'dog_image' && parsedResult.message && typeof parsedResult.message === 'string' && parsedResult.message.startsWith('https://images.dog.ceo')) {
+                                broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (JSON in agent's log)`;
+                            } else if (myMsg.payload.toolName === 'chuck_norris_joke' && parsedResult.value) {
+                                 broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (Joke: "${parsedResult.value}")`;
+                            } else {
+                                broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.toolName} result (full JSON in agent's log)`;
+                            }
+                        } catch (e) {
+                            broadcastTextPayload = `[${myMsg.type}]: ${myMsg.payload.result.substring(0, 100)}... (truncated)`;
+                        }
+                        this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', {
+                            senderName: mySendingClientInstance.myClientName,
+                            text: broadcastTextPayload
+                        });
+                        break;
+
+                    case 'COORDINATOR_IMAGE_BROADCAST':
+                        // This message type is primarily for agents to display images received from the coordinator
+                        break;
+
+                    case 'AGENT_DISCONNECT':
+                        const myDisconnectedClientInfo = this.myClients.get(myMsg.senderId);
+                        if (myDisconnectedClientInfo) {
+                            this.myClients.delete(myMsg.senderId);
+                            this.myAddLog(`Agent ${myDisconnectedClientInfo.id} (${myDisconnectedClientInfo.name}) disconnected.`);
+                            this.myUpdateClientListAndNotify();
+                            this.myBroadcastMessageToClients('COORDINATOR_DISCONNECTED_AGENT', { agentId: myDisconnectedClientInfo.id, agentName: myDisconnectedClientInfo.name });
+                            this.myBroadcastMessageToClients('COORDINATOR_BROADCAST_MESSAGE', { senderName: 'Coordinator', text: `${myDisconnectedClientInfo.name} has left the swarm.` });
+                        } else {
+                            this.myAddLog(`Unknown agent ${myMsg.senderId} attempted to disconnect.`);
+                        }
+                        break;
+
+                    case 'AGENT_PING': // Simple heartbeat response, usually just for keeping connection alive
+                        break;
+
+                    default:
+                        this.myAddLog(`Unknown message type received from agent ${myMsg.senderId}: ${myMsg.type}`);
+                        break;
+                }
+            }
+
+            // Notifies listeners (UI) when client list updates
+            myUpdateClientListAndNotify() {
+                this.myClientUpdateListeners.forEach(myListener => myListener());
+            }
+
+            // Registers a listener for coordinator log updates
+            myOnLog(myListener) {
+                this.myLogListeners.push(myListener);
+                return () => this.myLogListeners = this.myLogListeners.filter(myL => myL !== myListener);
+            }
+
+            // Registers a listener for client list updates
+            myOnClientUpdate(myListener) {
+                this.myClientUpdateListeners.push(myListener);
+                return () => this.myClientUpdateListeners = this.myClientUpdateListeners.filter(myL => myL !== myListener);
+            }
+
+            // Returns a list of connected client information
+            myGetClients() {
+                return Array.from(this.myClients.values()).map(myC => ({ id: myC.id, name: myC.name, status: myC.status }));
+            }
+        }
+
+
+        // --- Global DOM Utilities & Application Setup ---
+        // These are global elements and functions that set up the overall application.
+
+        let myServerInstance; // This variable will hold the MyAgentCoordinator instance
+        const myClientsContainer = document.getElementById('my-clients-container');
+        const myServerLogsDiv = document.getElementById('my-server-logs');
+        const myClientListDiv = document.getElementById('my-client-list');
+        const myConnectedClientsCountSpan = document.getElementById('my-connected-clients-count');
+
+        // Helper function for appending logs to a specific element, exposed globally
+        window.myAppendLog = function(myElement, myMessage) {
+            const myP = document.createElement('p');
+            myP.textContent = myMessage;
+            myElement.appendChild(myP);
+            myElement.scrollTop = myElement.scrollHeight;
+        }
+
+        // Function to create a new LLM client panel and instantiate an LLM agent
+        // Made global by attaching to window
+        window.myCreateClientPanelAndInstance = function(isFake = false) {
+            const myPanel = document.createElement('div');
+            myPanel.classList.add('my-client-panel');
+            const myClientIdSuffix = Math.random().toString(36).substring(2, 9); // Unique ID suffix for elements
+
+            // Dynamically create HTML for the new agent panel
+            myPanel.innerHTML = `
+                <h2 id="my-client-title-${myClientIdSuffix}">My LLM Agent (${isFake ? 'Fake/Inline' : 'Not Connected'})</h2>
+                <div id="my-connection-section-${myClientIdSuffix}">
+                    <h3>Connect to Coordinator</h3>
+                    <input type="text" id="my-client-name-input-${myClientIdSuffix}" placeholder="Enter agent name">
+                    <button id="my-connect-button-${myClientIdSuffix}" class="my-connect-button">Connect</button>
+                </div>
+                <div id="my-conversation-section-${myClientIdSuffix}" style="display: none;">
+                    <h3>MCP Conversation</h3>
+                    <div id="my-client-conversation-div-${myClientIdSuffix}" class="my-conversation-box"></div>
+                    <input type="text" id="my-query-input-${myClientIdSuffix}" placeholder="Type your query for the agent">
+                    <button id="my-send-query-button-${myClientIdSuffix}" class="my-send-button">Send Query</button>
+                </div>
+
+                <div id="my-llm-section-${myClientIdSuffix}" class="my-llm-section" style="display: none;">
+                    <h3>LLM Generation Controls</h3>
+                    <label for="my-model-input-${myClientIdSuffix}">Model:</label>
+                    <input id="my-model-input-${myClientIdSuffix}" type="text" size="60" value="onnx-community/DeepSeek-R1-Distill-Qwen-1.5B-ONNX">
+                    <button id="my-load-model-button-${myClientIdSuffix}">Load Model</button>
+                    <div id="my-progress-div-${myClientIdSuffix}">Loading progress: 0%</div>
+                    
+                    <textarea id="my-area01-${myClientIdSuffix}" rows="5" cols="70" placeholder="Ask your question here">Solve the equation: x^2 - 3x + 2 = 0</textarea>
+                    
+                    <details closed>
+                        <summary>Hyperparameters</summary>
+                        <div>
+                            <label>Max tokens in the answer:</label>
+                            <input id="my-max-tokens-${myClientIdSuffix}" type="number" style="width:60px" value="512" placeholder="512" title="The maximum number of words or characters the AI can generate in one response. Setting a low value makes shorter answers, while a high value allows for longer responses.">
+                            <label>Top_p: (closer to zero more focused, closer to 1 more variety)</label>
+                            <input id="my-top-p-${myClientIdSuffix}" type="number" style="width:60px" min="0" max="1" step="0.01" value="0.9" placeholder="0.9" title="Limits the AI's choices to the most likely words. A lower value (e.g., 0.5) makes the response more focused, while a higher value (e.g., 0.9) allows for more variety.">
+                            <label>Temperature: (Close to 0 more predictable, closer to 1 more diverse)</label>
+                            <input id="my-temperature-${myClientIdSuffix}" type="number" style="width:60px" min="0" max="1" step="0.01" value="0.7" placeholder="0.7" title="Controls how creative the AI is. A low value (e.g., 0.2) makes responses more predictable, while a high value (e.g., 1.0) makes them more random and diverse.">
+                            <label>Top_k:</label>
+                            <input id="my-top-k-${myClientIdSuffix}" type="number" style="width:60px" min="0" max="300" step="1" value="50" placeholder="50">
+                            <label>Min_length:</label>
+                            <input id="my-min-length-${myClientIdSuffix}" type="number" style="width:60px" min="0" max="10000" step="1" value="20" placeholder="20">
+                            <label>Repetition_penalty:</label>
+                            <input id="my-repetition-penalty-${myClientIdSuffix}" type="number" style="width:60px" min="0" max="10" step="0.1" value="1.2" placeholder="1.2">
+                            <label>Length_penalty:</label>
+                            <input id="my-length-penalty-${myClientIdSuffix}" type="number" style="width:60px" min="0" max="10" step="0.1" value="1.5" placeholder="1.5">
+                            <label><input id="my-do-sample-${myClientIdSuffix}" type="checkbox" checked> Do_sample: (When selected, picks and considers more token options making it varied and creative, not selected keeps safest token)</label>
+                            <label><input id="my-chain-of-thought-${myClientIdSuffix}" type="checkbox" checked> Chain_of_thought: (AI explains more about it's token creation process.)</label>
+                            <label><input id="my-early-stopping-${myClientIdSuffix}" type="checkbox" checked> Early_stopping:</label>
+                        </div>
+                    </details>
+                    <button id="my-ask-button-${myClientIdSuffix}">Ask Question</button>
+                    <button id="my-stop-button-${myClientIdSuffix}" disabled>Stop Generation</button>
+                    <textarea id="my-textarea01-${myClientIdSuffix}" rows="15" style="width:100%;" placeholder="Reply Goes here" READONLY></textarea>
+                    
+                    <h4>Rendered Output:</h4>
+                    <div id="my-math-output-${myClientIdSuffix}" class="my-math-output">...</div>
+                    <button id="my-render-math-button-${myClientIdSuffix}">Render Math</button>
+                    <button id="my-copy-rendered-button-${myClientIdSuffix}">Copy Rendered</button>
+                    <button id="my-copy-regular-button-${myClientIdSuffix}">Copy Regular</button>
+                    <button id="my-clear-button-${myClientIdSuffix}">Clear History</button>
+                    <textarea id="my-keep-area01-${myClientIdSuffix}" rows="5" style="width:100%;" placeholder="Copy here only when wished" READONLY></textarea>
+                </div>
+                <h3>My Agent Logs</h3>
+                <div id="my-client-logs-${myClientIdSuffix}" class="my-log-box"></div>
+            `;
+            myClientsContainer.appendChild(myPanel);
+
+            // Get references to the newly created UI elements within this specific panel
+            const myUiElements = {
+                myClientTitle: myPanel.querySelector(`#my-client-title-${myClientIdSuffix}`),
+                myConnectionSection: myPanel.querySelector(`#my-connection-section-${myClientIdSuffix}`),
+                myClientNameInput: myPanel.querySelector(`#my-client-name-input-${myClientIdSuffix}`),
+                myConnectButton: myPanel.querySelector(`#my-connect-button-${myClientIdSuffix}`),
+                myConversationSection: myPanel.querySelector(`#my-conversation-section-${myClientIdSuffix}`),
+                myClientConversationDiv: myPanel.querySelector(`#my-client-conversation-div-${myClientIdSuffix}`),
+                myQueryInput: myPanel.querySelector(`#my-query-input-${myClientIdSuffix}`),
+                mySendQueryButton: myPanel.querySelector(`#my-send-query-button-${myClientIdSuffix}`),
+                myClientLogsDiv: myPanel.querySelector(`#my-client-logs-${myClientIdSuffix}`),
+                
+                // LLM specific UI elements
+                myLlmSection: myPanel.querySelector(`#my-llm-section-${myClientIdSuffix}`),
+                myModelInput: myPanel.querySelector(`#my-model-input-${myClientIdSuffix}`),
+                myLoadModelButton: myPanel.querySelector(`#my-load-model-button-${myClientIdSuffix}`),
+                myProgressDiv: myPanel.querySelector(`#my-progress-div-${myClientIdSuffix}`),
+                myArea01: myPanel.querySelector(`#my-area01-${myClientIdSuffix}`),
+                myMaxTokensInput: myPanel.querySelector(`#my-max-tokens-${myClientIdSuffix}`),
+                myDoSampleCheckbox: myPanel.querySelector(`#my-do-sample-${myClientIdSuffix}`),
+                myTopPInput: myPanel.querySelector(`#my-top-p-${myClientIdSuffix}`),
+                myTemperatureInput: myPanel.querySelector(`#my-temperature-${myClientIdSuffix}`),
+                myChainOfThoughtCheckbox: myPanel.querySelector(`#my-chain-of-thought-${myClientIdSuffix}`),
+                myTopKInput: myPanel.querySelector(`#my-top-k-${myClientIdSuffix}`),
+                myMinLengthInput: myPanel.querySelector(`#my-min-length-${myClientIdSuffix}`),
+                myRepetitionPenaltyInput: myPanel.querySelector(`#my-repetition-penalty-${myClientIdSuffix}`),
+                myLengthPenaltyInput: myPanel.querySelector(`#my-length-penalty-${myClientIdSuffix}`),
+                myEarlyStoppingCheckbox: myPanel.querySelector(`#my-early-stopping-${myClientIdSuffix}`),
+                myAskButton: myPanel.querySelector(`#my-ask-button-${myClientIdSuffix}`),
+                myStopButton: myPanel.querySelector(`#my-stop-button-${myClientIdSuffix}`),
+                myTextarea01: myPanel.querySelector(`#my-textarea01-${myClientIdSuffix}`),
+                myMathOutputDiv: myPanel.querySelector(`#my-math-output-${myClientIdSuffix}`),
+                myRenderMathButton: myPanel.querySelector(`#my-render-math-button-${myClientIdSuffix}`),
+                myCopyRenderedButton: myPanel.querySelector(`#my-copy-rendered-button-${myClientIdSuffix}`),
+                myCopyRegularButton: myPanel.querySelector(`#my-copy-regular-button-${myClientIdSuffix}`),
+                myClearButton: myPanel.querySelector(`#my-clear-button-${myClientIdSuffix}`),
+                myKeepArea01: myPanel.querySelector(`#my-keep-area01-${myClientIdSuffix}`)
+            };
+
+            // Instantiate a new MyLLM_Agent from the imported class
+            new MyLLM_Agent(myServerInstance, myUiElements);
+        }
+
+        // Function to create a new IMU device panel and instantiate an IMU agent
+        // Made global by attaching to window
+        window.myCreateIMUDevicePanelAndInstance = function() {
+            const myPanel = document.createElement('div');
+            myPanel.classList.add('my-client-panel'); // Reusing client-panel style
+            const myClientIdSuffix = Math.random().toString(36).substring(2, 9); // Unique ID suffix
+
+            myPanel.innerHTML = `
+                <h2 id="my-imu-title-${myClientIdSuffix}">Fake TinyML IMU Device</h2>
+                <div id="my-connection-section-${myClientIdSuffix}">
+                    <h3>Connect to Coordinator</h3>
+                    <input type="text" id="my-imu-name-input-${myClientIdSuffix}" placeholder="Enter device name (e.g., IMU-01)">
+                    <button id="my-imu-connect-button-${myClientIdSuffix}">Connect</button>
+                </div>
+                <div id="my-controls-section-${myClientIdSuffix}" style="display: none;">
+                    <h3>IMU Broadcasts</h3>
+                    <div id="my-imu-data-display-${myClientIdSuffix}" class="my-imu-data-box"></div>
+                    <button id="my-start-imu-button-${myClientIdSuffix}">Start IMU Broadcast</button>
+                    <button id="my-stop-imu-button-${myClientIdSuffix}" disabled>Stop IMU Broadcast</button>
+
+                    <h3>Chat with MCP Server</h3>
+                    <div id="my-imu-conversation-div-${myClientIdSuffix}" class="my-conversation-box"></div>
+                    <input type="text" id="my-imu-query-input-${myClientIdSuffix}" placeholder="Type your query for the server">
+                    <button id="my-imu-send-query-button-${myClientIdSuffix}">Send Query</button>
+                </div>
+                <h3>Device Logs</h3>
+                <div id="my-imu-logs-${myClientIdSuffix}" class="my-log-box"></div>
+            `;
+            myClientsContainer.appendChild(myPanel);
+
+            // Get references to the newly created UI elements for the IMU device
+            const myUiElements = {
+                myImuTitle: myPanel.querySelector(`#my-imu-title-${myClientIdSuffix}`),
+                myConnectionSection: myPanel.querySelector(`#my-connection-section-${myClientIdSuffix}`),
+                myImuNameInput: myPanel.querySelector(`#my-imu-name-input-${myClientIdSuffix}`),
+                myImuConnectButton: myPanel.querySelector(`#my-imu-connect-button-${myClientIdSuffix}`),
+                myControlsSection: myPanel.querySelector(`#my-controls-section-${myClientIdSuffix}`),
+                myImuDataDisplay: myPanel.querySelector(`#my-imu-data-display-${myClientIdSuffix}`),
+                myStartImuButton: myPanel.querySelector(`#my-start-imu-button-${myClientIdSuffix}`),
+                myStopImuButton: myPanel.querySelector(`#my-stop-imu-button-${myClientIdSuffix}`),
+                myImuConversationDiv: myPanel.querySelector(`#my-imu-conversation-div-${myClientIdSuffix}`),
+                myImuQueryInput: myPanel.querySelector(`#my-imu-query-input-${myClientIdSuffix}`),
+                myImuSendQueryButton: myPanel.querySelector(`#my-imu-send-query-button-${myClientIdSuffix}`),
+                myImuLogsDiv: myPanel.querySelector(`#my-imu-logs-${myClientIdSuffix}`)
+            };
+
+            // Instantiate a new MyIMU_Agent from the imported class
+            new MyIMU_Agent(myServerInstance, myUiElements);
+        }
+
+
+        // Initialize the application after the script has run and DOM is ready.
+        myServerInstance = new MyAgentCoordinator(); // Assign to the global myServerInstance variable
+
+        myServerInstance.myOnLog((myLog) => {
+            window.myAppendLog(myServerLogsDiv, myLog);
+        });
+
+        myServerInstance.myOnClientUpdate(() => {
+            window.myUpdateServerClientList();
+        });
+
+        window.myUpdateServerClientList(); // Initial list update after myServerInstance is set
+    </script>
+</body>
+</html>
