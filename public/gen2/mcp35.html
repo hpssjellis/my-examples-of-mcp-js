@@ -330,7 +330,8 @@
             // Determine if the user is currently scrolled to the visual top of the chat.
             // With flex-direction: column-reverse, scrollTop = 0 means the oldest messages are visible (bottom).
             // To be at the 'top' (newest messages), scrollTop needs to be at its maximum value.
-            const myMaxScrollTop = myMasterChatLog.scrollHeight - myMasterChatLog.clientHeight;
+          //  const myMaxScrollTop = myMasterChatLog.scrollHeight - myMasterChatLog.clientHeight;
+            const myMaxScrollTop = 0;    // not really used
             // Allow a small threshold (e.g., 5 pixels) for "being at the top" to account for rendering differences.
             const myIsCurrentlyAtVisualTop = myMasterChatLog.scrollTop >= (myMaxScrollTop - 5);
 
@@ -341,7 +342,8 @@
             // If auto-scroll is enabled AND the user was already at the visual top, scroll to the new visual top.
             // If the user has scrolled away from the top, do not auto-scroll.
             if (myIsAutoScrollEnabled && myIsCurrentlyAtVisualTop) {
-                myMasterChatLog.scrollTop = myMasterChatLog.scrollHeight - myMasterChatLog.clientHeight;
+              //  myMasterChatLog.scrollTop = myMasterChatLog.scrollHeight - myMasterChatLog.clientHeight;
+                myMasterChatLog.scrollTop = 0;
             }
             console.log(`My: Master Chat: [${myTimestamp}] ${mySenderName}: ${myMessageText}`);
         }
