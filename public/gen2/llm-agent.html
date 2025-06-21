@@ -205,7 +205,20 @@
 
         <input id="myLoadButton" type="button" style="background-color:lime" value="Load Model" onclick="myLoadModel()"> Data warning ~1.4 GB saved to cache<br><br>
 
-        <textarea id="myArea01" rows="5" cols="70" placeholder="Ask your question here">Solve the equation: x^2 - 3x + 2 = 0</textarea><br>
+        <textarea id="myArea01" rows="5" cols="70" placeholder="Ask your question here">"You are an activity analysis assistant. Below is a log of IMU (Inertial Measurement Unit) data, showing different agents, the duration of their activity, and the type of activity at specific timestamps.
+
+Analyze this data and provide insights on the following:
+
+1.  **Activity Distribution:** Summarize the total time spent in each activity state (sleeping, sitting, standing, walking, running, sprinting, other) across all IMU agents during the recorded period.
+2.  **Agent-Specific Patterns:** Are there any noticeable patterns or predominant activities for individual agents (Imu1, Imu2, Imu3, Imu4)? For example, does one agent tend to be more active, or spend more time sleeping?
+3.  **Transitions/Changes:** Observe if there are any interesting transitions between activities for any agent over time.
+4.  **Anomalies/Unusual Behavior:** Are there any data points that seem unusual or stand out?
+5.  **Potential Interpretations/Recommendations:** Based on this limited data, what might this activity data indicate about the agents' 'behavior' or 'usage'? (e.g., 'Imu1 appears to be focused on high-intensity activity followed by rest periods', or 'Imu3 shows a mix of low and moderate activity').
+
+        
+        
+        
+        </textarea><br>
 
         <details closed> <summary>Click for hyperparameters which may or may not work</summary>
             <input id="myMaxTokens" type="number" style="width:60px" value="512" placeholder="512" title="The maximum number of words or characters the AI can generate in one response. Setting a low value makes shorter answers, while a high value allows for longer responses.">
