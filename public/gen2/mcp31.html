@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My MCP Server</title>
+    <style>
+        /* Basic styling for the entire page to center content */
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        /* Container for the main application content */
+        .my-container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px; /* Rounded corners */
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        /* Styling for buttons */
+        .my-button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px; /* Rounded corners */
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .my-button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        .my-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        /* Input fields for agent names */
+        .my-input-group {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        }
+        .my-input-group label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .my-input-group input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1em;
+            flex-grow: 1; /* Allow input to grow */
+            max-width: 200px; /* Limit max width */
+        }
+        /* Styling for the master chat window */
+        .my-master-chat-container {
+            margin-top: 25px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+            text-align: left;
+        }
+        .my-master-chat-messages {
+            margin-top: 10px;
+            max-height: 400px; /* Taller chat window */
+            min-height: 150px; /* Minimum height */
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        .my-chat-message-entry {
+            margin-bottom: 8px;
+            word-wrap: break-word;
+            line-height: 1.4;
+            padding: 5px 0;
+            border-bottom: 1px dotted #e9ecef; /* Subtle separator */
+        }
+        .my-chat-message-entry:last-child {
+            border-bottom: none;
+        }
+        .my-message-sender {
+            font-weight: bold;
+            color: #0056b3; /* Darker blue for sender name */
+            margin-right: 5px;
+        }
+        .my-message-timestamp {
+            font-size: 0.85em;
+            color: #6c757d;
+            float: right;
+        }
+        .my-message-text {
+            display: block;
+            margin-top: 3px;
+            color: #343a40;
+        }
+        /* Inline chat input area */
+        .my-inline-chat-input-area {
+            margin-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+        }
+        .my-inline-chat-input {
+            width: calc(100% - 100px); /* Adjust for button */
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            box-sizing: border-box;
+            margin-right: 10px;
+        }
+        .my-inline-send-button {
+            padding: 10px 20px;
+            background-color: #28a745; /* Green send button */
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .my-inline-send-button:hover {
+            background-color: #218838;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .my-container {
+                padding: 20px;
+            }
+            .my-button {
+                width: 95%;
+                margin: 8px 0;
+            }
+            .my-input-group {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .my-input-group label {
+                margin-bottom: 5px;
+            }
+            .my-input-group input[type="text"] {
+                width: 100%;
+                max-width: none;
+            }
+            .my-inline-chat-input-area {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .my-inline-chat-input {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+            .my-inline-send-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="my-container">
+        <h1>My MCP Server</h1>
+
+        <!-- Input for Inline Chat Agent Name -->
+        <div class="my-input-group">
+            <label for="myInlineAgentNameInput">Inline Agent Name:</label>
+            <input type="text" id="myInlineAgentNameInput" placeholder="e.g., UserChat">
+            <button class="my-button" onclick="myOpenInlineChatAgent()">Open Inline Chat Agent</button>
+        </div>
+
+        <!-- Input for LLM Agent Name -->
+        <div class="my-input-group">
+            <label for="myLLMAgentNameInput">LLM Agent Name:</label>
+            <input type="text" id="myLLMAgentNameInput" placeholder="e.g., MyLLM">
+            <button class="my-button" onclick="myOpenLLMAgent()">Open LLM Agent</button>
+        </div>
+
+        <!-- Input for IMU Agent Name -->
+        <div class="my-input-group">
+            <label for="myIMUAgentNameInput">IMU Agent Name:</label>
+            <input type="text" id="myIMUAgentNameInput" placeholder="e.g., MyIMU">
+            <button class="my-button" onclick="myOpenIMUAgent()">Open IMU Agent</button>
+        </div>
+
+        <!-- Master Chat Window -->
+        <div class="my-master-chat-container">
+            <h2>My Master Chat Log</h2>
+            <div id="myMasterChatLog" class="my-master-chat-messages">
+                <!-- All messages from all agents will appear here -->
+            </div>
+        </div>
+
+        <!-- Input for sending messages from the MCP Server itself (as an "inline" agent) -->
+        <div class="my-inline-chat-input-area">
+            <h3>Send Message (MCP Server as Agent)</h3>
+            <input type="text" id="myMCPInput" class="my-inline-chat-input" placeholder="Type message from MCP Server...">
+            <button class="my-inline-send-button" onclick="mySendMessageFromMCP()">Send from MCP</button>
+        </div>
+
+    </div>
+
+    <script>
+        // Array to store references to opened agent windows (LLM, IMU)
+        let myOpenedAgentWindows = [];
+        // Counter for default agent names
+        let myAgentCounter = {
+            inline: 1,
+            llm: 1,
+            imu: 1
+        };
+
+        /**
+         * Appends a message to the single master chat log.
+         * @param {string} mySenderName - The name of the agent sending the message.
+         * @param {string} myMessageText - The text of the message.
+         * @param {string} myMessageType - Optional: type of agent (e.g., 'llm', 'imu', 'chat').
+         */
+        function myAppendMessageToMasterChat(mySenderName, myMessageText, myMessageType = 'unknown') {
+            const myMasterChatLog = document.getElementById('myMasterChatLog');
+            const myMessageEntry = document.createElement('div');
+            myMessageEntry.className = 'my-chat-message-entry';
+
+            const myTimestamp = new Date().toLocaleTimeString();
+
+            myMessageEntry.innerHTML = `
+                <span class="my-message-sender">${mySenderName}</span>
+                <span class="my-message-timestamp">[${myTimestamp}]</span>
+                <div class="my-message-text">${myMessageText}</div>
+            `;
+            myMasterChatLog.appendChild(myMessageEntry);
+            // Scroll to the bottom to show the newest message
+            myMasterChatLog.scrollTop = myMasterChatLog.scrollHeight;
+            console.log(`My: Master Chat: [${mySenderName}] ${myMessageText}`);
+        }
+
+        /**
+         * Opens a new inline chat agent.
+         * This now just sends a message from "MCP Server" agent.
+         * The original "multiple inline chat agents" concept is removed in favor of a single master chat.
+         */
+        async function myOpenInlineChatAgent() {
+            let myAgentName = document.getElementById('myInlineAgentNameInput').value.trim();
+            if (!myAgentName) {
+                myAgentName = `Chat${myAgentCounter.inline++}`;
+                document.getElementById('myInlineAgentNameInput').value = myAgentName; // Update input with default
+            }
+            myAppendMessageToMasterChat(myAgentName, `Joined the master chat.`, 'chat');
+            console.log(`My: Inline chat agent "${myAgentName}" is now active in the master chat.`);
+            // No separate chat window, just signifies participation in the master chat.
+            // The input for sending messages from the MCP server itself will act as this agent's input.
+        }
+
+        /**
+         * Sends a message from the MCP server itself, acting as an inline agent.
+         */
+        async function mySendMessageFromMCP() {
+            const myMCPInput = document.getElementById('myMCPInput');
+            const myMessage = myMCPInput.value.trim();
+            if (myMessage === '') {
+                return;
+            }
+
+            let mySenderName = document.getElementById('myInlineAgentNameInput').value.trim();
+            if (!mySenderName) {
+                 mySenderName = `Chat${myAgentCounter.inline}`; // Use current default if not set
+            }
+
+            myAppendMessageToMasterChat(mySenderName, myMessage, 'chat');
+            myMCPInput.value = ''; // Clear input
+        }
+
+
+        /**
+         * Opens the LLM agent page in a new tab, passing the agent's desired name.
+         */
+        async function myOpenLLMAgent() {
+            let myAgentName = document.getElementById('myLLMAgentNameInput').value.trim();
+            if (!myAgentName) {
+                myAgentName = `LLM${myAgentCounter.llm++}`;
+                document.getElementById('myLLMAgentNameInput').value = myAgentName; // Update input with default
+            }
+
+            // Encode the name for URL safety
+            const myEncodedAgentName = encodeURIComponent(myAgentName);
+            const myNewWindow = window.open(`llm-agent.html?agentName=${myEncodedAgentName}`, '_blank', 'width=500,height=400');
+            if (myNewWindow) {
+                myOpenedAgentWindows.push(myNewWindow);
+                console.log(`My: LLM Agent tab opened with name: "${myAgentName}".`);
+            } else {
+                console.error('My: Could not open LLM Agent tab. Pop-ups might be blocked.');
+            }
+        }
+
+        /**
+         * Opens an IMU agent page in a new tab, passing the agent's desired name.
+         */
+        async function myOpenIMUAgent() {
+            let myAgentName = document.getElementById('myIMUAgentNameInput').value.trim();
+            if (!myAgentName) {
+                myAgentName = `IMU${myAgentCounter.imu++}`;
+                document.getElementById('myIMUAgentNameInput').value = myAgentName; // Update input with default
+            }
+
+            // Encode the name for URL safety
+            const myEncodedAgentName = encodeURIComponent(myAgentName);
+            const myNewWindow = window.open(`imu-agent.html?agentName=${myEncodedAgentName}`, '_blank', 'width=500,height=400');
+            if (myNewWindow) {
+                myOpenedAgentWindows.push(myNewWindow);
+                console.log(`My: IMU Agent tab opened with name: "${myAgentName}".`);
+            } else {
+                console.error('My: Could not open IMU Agent tab. Pop-ups might be blocked.');
+            }
+        }
+
+        /**
+         * Handles incoming messages from any source (expected from agent tabs).
+         * This function acts as the central message receiver for the MCP server.
+         * @param {MessageEvent} myEvent - The message event object.
+         */
+        window.onmessage = async function(myEvent) {
+            // Ensure the message is from a trusted origin if in production.
+            if (myEvent.data && typeof myEvent.data === 'object' && myEvent.data.type && myEvent.data.senderName && myEvent.data.message) {
+                myAppendMessageToMasterChat(myEvent.data.senderName, myEvent.data.message, myEvent.data.type);
+            } else {
+                console.warn('My: Received an unrecognized message format or missing data:', myEvent.data);
+            }
+        };
+
+        // Set up event listener for 'Enter' key in the MCP input field
+        const myMCPInputField = document.getElementById('myMCPInput');
+        myMCPInputField.onkeyup = async function(event) {
+            if (event.key === 'Enter') {
+                await mySendMessageFromMCP();
+            }
+        };
+
+        // Add a simple Inter font link, though for full embedding it's more complex.
+        const myFontLink = document.createElement('link');
+        myFontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap';
+        myFontLink.rel = 'stylesheet';
+        document.head.appendChild(myFontLink);
+    </script>
+</body>
+</html>
