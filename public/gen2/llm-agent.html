@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My LLM Agent</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #e6f7ff; /* Light blue background */
+            color: #212529;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .my-container {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            color: #007bff;
+        }
+        p {
+            margin-top: 15px;
+            font-size: 1.1em;
+            color: #495057;
+        }
+        .my-status-message {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #d4edda; /* Light green for status */
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            color: #155724;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="my-container">
+        <h1>My LLM Agent</h1>
+        <p>This agent is simulating an LLM generating responses.</p>
+        <p>It sends a "fake LLM chat" message to the MCP server every 2 minutes.</p>
+        <div id="myStatus" class="my-status-message">Initializing...</div>
+    </div>
+
+    <script>
+        // Store a reference to the Web Worker
+        let myLLMAgentWorker;
+        // Reference to the status message element
+        let myStatusElement;
+
+        /**
+         * Initializes the LLM agent, including its Web Worker.
+         */
+        async function myInitLLMAgent() {
+            myStatusElement = document.getElementById('myStatus');
+            myStatusElement.textContent = 'Starting LLM Agent Worker...';
+
+            try {
+                // Check if window.opener exists, meaning it was opened by another window (the MCP server)
+                if (window.opener) {
+                    console.log('My: LLM Agent running. Opener window detected.');
+                    // Create a new Web Worker instance
+                    myLLMAgentWorker = new Worker('llm-agent-worker.js');
+
+                    // Set up listener for messages FROM the worker
+                    myLLMAgentWorker.onmessage = async function(myEvent) {
+                        console.log('My: LLM Agent received message from worker:', myEvent.data);
+                        // The worker sends the message, this main thread relays it to the MCP server
+                        // The type 'llm_chat' helps the MCP server identify the sender.
+                        window.opener.postMessage({ type: 'llm_chat', message: myEvent.data }, '*');
+                        myStatusElement.textContent = `Last sent: "${myEvent.data}" at ${new Date().toLocaleTimeString()}`;
+                    };
+
+                    // Set up listener for messages TO the worker (e.g., from MCP if needed later)
+                    myLLMAgentWorker.onerror = function(myError) {
+                        console.error('My: LLM Agent Worker error:', myError);
+                        myStatusElement.textContent = `Error in worker: ${myError.message}`;
+                    };
+
+                    // Tell the worker to start its periodic fake chat messages
+                    myLLMAgentWorker.postMessage('start_fake_chat_interval');
+
+                    myStatusElement.textContent = 'LLM Agent Worker started. Sending fake chats every 2 minutes.';
+
+                } else {
+                    myStatusElement.textContent = 'LLM Agent running in standalone mode (no opener detected).';
+                    console.warn('My: LLM Agent opened directly, not via MCP server. Communication to opener will not work.');
+                }
+            } catch (myError) {
+                console.error('My: Error initializing LLM Agent:', myError);
+                myStatusElement.textContent = `Error: ${myError.message}. Check console.`;
+            }
+        }
+
+        // Initialize the agent when the page loads
+        window.onload = async function() {
+            await myInitLLMAgent();
+        };
+
+        // Add a simple Inter font link
+        const myFontLink = document.createElement('link');
+        myFontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap';
+        myFontLink.rel = 'stylesheet';
+        document.head.appendChild(myFontLink);
+    </script>
+</body>
+</html>
