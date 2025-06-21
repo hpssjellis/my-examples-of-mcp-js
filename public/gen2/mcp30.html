@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My MCP Server</title>
+    <style>
+        /* Basic styling for the entire page to center content */
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        /* Container for the main application content */
+        .my-container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px; /* Rounded corners */
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        /* Styling for buttons */
+        .my-button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px; /* Rounded corners */
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .my-button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        .my-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        /* Section for chat agents */
+        .my-chat-agents-container {
+            margin-top: 25px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+            text-align: left;
+        }
+        .my-chat-agent {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        .my-chat-agent-input {
+            width: calc(100% - 16px);
+            padding: 8px;
+            margin-top: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .my-chat-messages {
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+        .my-chat-message-entry {
+            margin-bottom: 5px;
+            word-wrap: break-word;
+        }
+        /* Styling for messages from LLM/IMU agents */
+        .my-agent-messages-container {
+            margin-top: 25px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+            text-align: left;
+        }
+        .my-agent-message {
+            background-color: #d1ecf1;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+            color: #0c5460;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+        }
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .my-container {
+                padding: 20px;
+            }
+            .my-button {
+                width: 95%;
+                margin: 8px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="my-container">
+        <h1>My MCP Server</h1>
+
+        <!-- Buttons to manage agents -->
+        <div class="my-button-group">
+            <button class="my-button" onclick="myOpenChatAgent()">Open Inline Chat Agent</button>
+            <button class="my-button" onclick="myOpenLLMAgent()">Open LLM Agent</button>
+            <button class="my-button" onclick="myOpenIMUAgent()">Open IMU Agent</button>
+        </div>
+
+        <!-- Container for inline chat agents -->
+        <div class="my-chat-agents-container">
+            <h2>My Inline Chat Agents</h2>
+            <div id="myChatAgentsArea">
+                <!-- Chat agents will be added here dynamically -->
+            </div>
+        </div>
+
+        <!-- Container for messages from LLM/IMU agents -->
+        <div class="my-agent-messages-container">
+            <h2>My Agent Messages</h2>
+            <div id="myAgentMessagesArea">
+                <!-- Messages from LLM/IMU agents will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Array to store references to opened agent windows (LLM, IMU)
+        let myOpenedAgentWindows = [];
+        // Array to store data for inline chat agents
+        let myInlineChatAgents = [];
+        // Counter for unique chat agent IDs
+        let myChatAgentIdCounter = 0;
+        // Counter for incoming messages from external agents
+        let myMessageCounter = 0;
+
+        /**
+         * Opens a new inline chat agent directly within the MCP server page.
+         * Each agent has its own input and message display.
+         */
+        async function myOpenChatAgent() {
+            const myAgentId = `chat-agent-${myChatAgentIdCounter++}`;
+            const myChatAgentsArea = document.getElementById('myChatAgentsArea');
+
+            // Create a new div for the chat agent
+            const myAgentDiv = document.createElement('div');
+            myAgentDiv.className = 'my-chat-agent';
+            myAgentDiv.id = myAgentId;
+
+            // Add a heading for the agent
+            myAgentDiv.innerHTML = `
+                <h3>Chat Agent ${myChatAgentIdCounter}</h3>
+                <div class="my-chat-messages" id="myChatMessages-${myAgentId}"></div>
+                <input type="text" class="my-chat-agent-input" id="myChatInput-${myAgentId}" placeholder="Type your message..." />
+                <button class="my-button" style="margin-top: 10px; padding: 8px 15px; font-size: 14px;" onclick="mySendMessageFromInlineAgent('${myAgentId}')">Send</button>
+            `;
+
+            myChatAgentsArea.appendChild(myAgentDiv);
+
+            // Store agent data
+            myInlineChatAgents.push({
+                id: myAgentId,
+                name: `Chat Agent ${myChatAgentIdCounter}`,
+                messages: []
+            });
+
+            // Set up event listener for 'Enter' key in the input field
+            const myInputField = document.getElementById(`myChatInput-${myAgentId}`);
+            myInputField.onkeyup = async function(event) {
+                if (event.key === 'Enter') {
+                    await mySendMessageFromInlineAgent(myAgentId);
+                }
+            };
+
+            console.log(`My: Opened new inline chat agent: ${myAgentId}`);
+        }
+
+        /**
+         * Sends a message from an inline chat agent.
+         * The message is displayed in all other inline chat agents and also in its own chat.
+         * @param {string} myAgentId - The ID of the inline agent sending the message.
+         */
+        async function mySendMessageFromInlineAgent(myAgentId) {
+            const myInputField = document.getElementById(`myChatInput-${myAgentId}`);
+            const myMessage = myInputField.value.trim();
+
+            if (myMessage === '') {
+                return; // Do nothing if the message is empty
+            }
+
+            const mySenderAgent = myInlineChatAgents.find(agent => agent.id === myAgentId);
+            if (!mySenderAgent) {
+                console.error(`My: Sender agent not found: ${myAgentId}`);
+                return;
+            }
+
+            const myFullMessage = `${mySenderAgent.name}: ${myMessage}`;
+            const myTimestamp = new Date().toLocaleTimeString();
+
+            // Append message to the sender's own chat
+            myAppendMessageToChat(myAgentId, myFullMessage, myTimestamp, 'sent');
+
+            // Append message to all other inline chat agents
+            myInlineChatAgents.forEach(myAgent => {
+                if (myAgent.id !== myAgentId) {
+                    myAppendMessageToChat(myAgent.id, myFullMessage, myTimestamp, 'received');
+                }
+            });
+
+            // Clear the input field
+            myInputField.value = '';
+            console.log(`My: Message sent from ${myAgentId}: "${myMessage}"`);
+        }
+
+        /**
+         * Appends a message to a specific inline chat agent's display.
+         * @param {string} myAgentId - The ID of the chat agent.
+         * @param {string} myMessageText - The text of the message.
+         * @param {string} myTimestamp - The timestamp of the message.
+         * @param {string} myMessageType - 'sent' or 'received' for styling.
+         */
+        function myAppendMessageToChat(myAgentId, myMessageText, myTimestamp, myMessageType) {
+            const myChatMessagesArea = document.getElementById(`myChatMessages-${myAgentId}`);
+            if (myChatMessagesArea) {
+                const myMessageEntry = document.createElement('div');
+                myMessageEntry.className = `my-chat-message-entry my-${myMessageType}-message`;
+                myMessageEntry.innerHTML = `<small style="color: #6c757d;">[${myTimestamp}]</small> ${myMessageText}`;
+                myChatMessagesArea.appendChild(myMessageEntry);
+                // Scroll to the bottom to show the newest message
+                myChatMessagesArea.scrollTop = myChatMessagesArea.scrollHeight;
+            }
+        }
+
+        /**
+         * Opens the LLM agent page in a new tab.
+         * It passes its own origin so the LLM agent can message back.
+         */
+        async function myOpenLLMAgent() {
+            // Open the LLM agent page in a new tab
+            const myNewWindow = window.open('llm-agent.html', '_blank', 'width=500,height=400');
+            if (myNewWindow) {
+                myOpenedAgentWindows.push(myNewWindow);
+                console.log('My: LLM Agent tab opened.');
+            } else {
+                console.error('My: Could not open LLM Agent tab. Pop-ups might be blocked.');
+            }
+        }
+
+        /**
+         * Opens an IMU agent page in a new tab.
+         * Multiple IMU agents can be opened.
+         */
+        async function myOpenIMUAgent() {
+            // Open the IMU agent page in a new tab
+            const myNewWindow = window.open('imu-agent.html', '_blank', 'width=500,height=400');
+            if (myNewWindow) {
+                myOpenedAgentWindows.push(myNewWindow);
+                console.log('My: IMU Agent tab opened.');
+            } else {
+                console.error('My: Could not open IMU Agent tab. Pop-ups might be blocked.');
+            }
+        }
+
+        /**
+         * Handles incoming messages from any source (expected from agent tabs).
+         * This function acts as the central message receiver for the MCP server.
+         * @param {MessageEvent} myEvent - The message event object.
+         */
+        window.onmessage = async function(myEvent) {
+            // Ensure the message is from a trusted origin if in production.
+            // For this simple example, we'll accept from any origin ('*').
+            // myEvent.origin would be the origin of the sender.
+            if (myEvent.data && typeof myEvent.data === 'object' && myEvent.data.type) {
+                await myProcessIncomingAgentMessage(myEvent.data);
+            } else {
+                console.warn('My: Received an unrecognized message format:', myEvent.data);
+            }
+        };
+
+        /**
+         * Processes an incoming message from an agent.
+         * Displays the message in the agent messages area.
+         * @param {object} myMessageData - The data object sent from the agent.
+         * @param {string} myMessageData.type - The type of message (e.g., 'llm_chat', 'imu_chat').
+         * @param {string} myMessageData.message - The actual message content.
+         */
+        async function myProcessIncomingAgentMessage(myMessageData) {
+            myMessageCounter++;
+            const myAgentMessagesArea = document.getElementById('myAgentMessagesArea');
+            const myMessageEntry = document.createElement('div');
+            myMessageEntry.className = 'my-agent-message';
+            myMessageEntry.innerHTML = `<strong>[${myMessageCounter}] ${myMessageData.type.toUpperCase()}:</strong> ${myMessageData.message} <small style="float: right; color: #6c757d;">${new Date().toLocaleTimeString()}</small>`;
+            myAgentMessagesArea.appendChild(myMessageEntry);
+            // Scroll to the bottom
+            myAgentMessagesArea.scrollTop = myAgentMessagesArea.scrollHeight;
+            console.log(`My: Received message from agent (${myMessageData.type}): ${myMessageData.message}`);
+        }
+
+        // Add a simple Inter font link, though for full embedding it's more complex.
+        // For a true static HTML, you might prefer a system font or to host it.
+        // This is a common way to include Google Fonts for simple demos.
+        const myFontLink = document.createElement('link');
+        myFontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap';
+        myFontLink.rel = 'stylesheet';
+        document.head.appendChild(myFontLink);
+    </script>
+</body>
+</html>
