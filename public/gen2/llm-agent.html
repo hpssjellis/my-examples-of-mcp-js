@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My LLM Agent</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align to top to make space for chat */
+            min-height: 100vh;
+            margin: 0;
+            background-color: #e6f7ff; /* Light blue background */
+            color: #212529;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .my-container {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 20px; /* Space before the chat box */
+        }
+        h1 {
+            color: #007bff;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        p {
+            margin-top: 5px;
+            font-size: 1em;
+            color: #495057;
+        }
+        .my-status-message {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #d4edda; /* Light green for status */
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            color: #155724;
+            font-weight: bold;
+            text-align: left;
+            word-wrap: break-word;
+        }
+        /* Styling for the agent's received messages box */
+        .my-received-messages-container {
+            width: 100%;
+            max-width: 400px;
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: left;
+        }
+        .my-received-messages-container h2 {
+            margin-top: 0;
+            color: #007bff;
+            font-size: 1.2em;
+        }
+        .my-received-chat-options {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            justify-content: flex-end; /* Align to the right */
+            font-size: 0.9em;
+        }
+        .my-received-chat-options input[type="checkbox"] {
+            margin-right: 5px;
+            transform: scale(1.1);
+        }
+        .my-received-messages-box {
+            max-height: 250px; /* Limit height for scrollability */
+            min-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column-reverse; /* Newest messages at the top */
+        }
+        .my-received-message-entry {
+            word-wrap: break-word;
+            line-height: 1.4;
+            padding: 5px 0;
+            border-bottom: 1px dotted #e9ecef;
+            display: flex;
+            align-items: baseline;
+            width: 100%;
+        }
+        .my-received-message-entry:last-child {
+            border-bottom: none;
+        }
+        .my-received-message-timestamp {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        .my-received-message-sender {
+            font-weight: bold;
+            color: #0056b3;
+            margin-right: 5px;
+            flex-shrink: 0;
+        }
+        .my-received-message-text {
+            flex-grow: 1;
+            color: #343a40;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body>
+    <div class="my-container">
+        <h1 id="myAgentTitle">My LLM Agent</h1>
+        <p>This agent is simulating an LLM generating responses.</p>
+        <p>It sends a "fake LLM chat" message to the MCP server every 2 minutes.</p>
+        <div id="myStatus" class="my-status-message">Initializing...</div>
+    </div>
+
+    <div class="my-received-messages-container">
+        <h2>Messages from MCP Server</h2>
+        <div class="my-received-chat-options">
+            <input type="checkbox" id="myReceivedAutoScrollCheckbox" checked>
+            <label for="myReceivedAutoScrollCheckbox">Auto-scroll to top</label>
+        </div>
+        <div id="myReceivedMessagesBox" class="my-received-messages-box">
+            <!-- Messages from MCP server will appear here -->
+        </div>
+    </div>
+
+    <script>
+        // Store a reference to the Web Worker (now optional for content generation)
+        let myLLMAgentWorker = null; // Initialize as null as it might not be strictly needed for basic messages
+        // Reference to the status message element
+        let myStatusElement;
+        // Variable to hold the agent's name
+        let myAgentName = "DefaultLLM"; // Default name if not provided via URL
+
+        /**
+         * Appends a message to the agent's received messages box.
+         * Messages are added in reverse order.
+         * @param {string} mySenderName - The name of the sender.
+         * @param {string} myMessageText - The text of the message.
+         */
+        function myAppendReceivedMessage(mySenderName, myMessageText) {
+            const myReceivedMessagesBox = document.getElementById('myReceivedMessagesBox');
+            const myMessageEntry = document.createElement('div');
+            myMessageEntry.className = 'my-received-message-entry';
+
+            const myTimestamp = new Date().toLocaleTimeString();
+
+            myMessageEntry.innerHTML = `
+                <span class="my-received-message-timestamp">[${myTimestamp}]</span>
+                <span class="my-received-message-sender">${mySenderName}:</span>
+                <span class="my-received-message-text">${myMessageText}</span>
+            `;
+
+            const myAutoScrollCheckbox = document.getElementById('myReceivedAutoScrollCheckbox');
+            const myIsAutoScrollEnabled = myAutoScrollCheckbox.checked;
+
+            const myMaxScrollTop = myReceivedMessagesBox.scrollHeight - myReceivedMessagesBox.clientHeight;
+            const myIsCurrentlyAtVisualTop = myReceivedMessagesBox.scrollTop >= (myMaxScrollTop - 5);
+
+            myReceivedMessagesBox.appendChild(myMessageEntry);
+
+            if (myIsAutoScrollEnabled && myIsCurrentlyAtVisualTop) {
+                myReceivedMessagesBox.scrollTop = myReceivedMessagesBox.scrollHeight - myReceivedMessagesBox.clientHeight;
+            }
+        }
+
+        /**
+         * Generates and sends a fake LLM message to the MCP server.
+         */
+        async function mySendFakeLLMMessage() {
+            const myFakeMessage = `Fake LLM response from ${myAgentName}. Current time: ${new Date().toLocaleTimeString()}`;
+            if (window.opener) {
+                window.opener.postMessage({ type: 'llm_chat', senderName: myAgentName, message: myFakeMessage }, '*');
+                myStatusElement.textContent = `Last sent: "${myFakeMessage}" at ${new Date().toLocaleTimeString()}`;
+                console.log(`My: LLM Agent sent message to MCP: "${myFakeMessage}"`);
+            } else {
+                console.warn('My: LLM Agent: No opener window found to send message.');
+            }
+        }
+
+
+        /**
+         * Initializes the LLM agent.
+         */
+        async function myInitLLMAgent() {
+            myStatusElement = document.getElementById('myStatus');
+            myStatusElement.textContent = 'Initializing LLM Agent...';
+
+            // Get agent name from URL parameter
+            const myUrlParams = new URLSearchParams(window.location.search);
+            const myNameFromUrl = myUrlParams.get('agentName');
+            if (myNameFromUrl) {
+                myAgentName = decodeURIComponent(myNameFromUrl);
+                document.getElementById('myAgentTitle').textContent = `My LLM Agent (${myAgentName})`;
+            }
+
+            try {
+                if (window.opener) {
+                    console.log('My: LLM Agent running. Opener window detected.');
+
+                    // --- NEW: Start message generation directly on the main thread ---
+                    setInterval(async () => {
+                        await mySendFakeLLMMessage();
+                    }, 120000); // Every 2 minutes
+                    // --- END NEW ---
+
+                    // Optionally, you can still use the worker for other background tasks
+                    // For now, it will just confirm it started if you uncomment the worker logic below
+                    /*
+                    myLLMAgentWorker = new Worker('web-worker.js');
+                    myLLMAgentWorker.onmessage = function(myEvent) {
+                        console.log('My: LLM Agent received message from worker:', myEvent.data);
+                        // This worker message is just a confirmation, not the actual chat message
+                    };
+                    myLLMAgentWorker.onerror = function(myError) {
+                        console.error('My: LLM Agent Worker error:', myError);
+                    };
+                    myLLMAgentWorker.postMessage({ type: 'init_agent', agentType: 'llm', agentName: myAgentName });
+                    */
+
+                    myStatusElement.textContent = `LLM Agent started for "${myAgentName}". Sending fake chats every 2 minutes.`;
+
+                } else {
+                    myStatusElement.textContent = 'LLM Agent running in standalone mode (no opener detected).';
+                    console.warn('My: LLM Agent opened directly, not via MCP server. Communication to opener will not work.');
+                }
+            } catch (myError) {
+                console.error('My: Error initializing LLM Agent:', myError);
+                myStatusElement.textContent = `Error: ${myError.message}. Check console.`;
+            }
+        }
+
+        /**
+         * Handles incoming messages from the MCP server.
+         * @param {MessageEvent} myEvent - The message event object.
+         */
+        window.onmessage = async function(myEvent) {
+            if (myEvent.data && typeof myEvent.data === 'object' && myEvent.data.senderName && myEvent.data.message) {
+                myAppendReceivedMessage(myEvent.data.senderName, myEvent.data.message);
+            } else {
+                console.warn('My: LLM Agent received an unrecognized message format from MCP:', myEvent.data);
+            }
+        };
+
+        window.onload = async function() {
+            await myInitLLMAgent();
+        };
+
+        const myFontLink = document.createElement('link');
+        myFontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap';
+        myFontLink.rel = 'stylesheet';
+        document.head.appendChild(myFontLink);
+    </script>
+</body>
+</html>
