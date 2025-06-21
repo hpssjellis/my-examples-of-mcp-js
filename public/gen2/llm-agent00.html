@@ -10,7 +10,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             min-height: 100vh;
             margin: 0;
             background-color: #e6f7ff; /* Light blue background */
@@ -25,74 +25,499 @@
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
             text-align: center;
             width: 100%;
-            max-width: 400px;
+            max-width: 800px; /* Increased max-width for LLM content */
+            margin-bottom: 20px;
         }
         h1 {
             color: #007bff;
+            margin-top: 0;
+            margin-bottom: 10px;
         }
         p {
-            margin-top: 15px;
-            font-size: 1.1em;
+            margin-top: 5px;
+            font-size: 1em;
             color: #495057;
         }
         .my-status-message {
             margin-top: 20px;
             padding: 10px;
-            background-color: #d4edda; /* Light green for status */
+            background-color: #d4edda;
             border: 1px solid #c3e6cb;
             border-radius: 5px;
             color: #155724;
             font-weight: bold;
+            text-align: left;
+            word-wrap: break-word;
         }
+
+        /* Styling for the agent's received messages box */
+        .my-received-messages-container {
+            width: 100%;
+            max-width: 800px; /* Matches main container */
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: left;
+            margin-top: 20px;
+        }
+        .my-received-messages-container h2 {
+            margin-top: 0;
+            color: #007bff;
+            font-size: 1.2em;
+        }
+        .my-received-chat-options {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            justify-content: flex-end;
+            font-size: 0.9em;
+        }
+        .my-received-chat-options input[type="checkbox"] {
+            margin-right: 5px;
+            transform: scale(1.1);
+        }
+        .my-received-messages-box {
+            max-height: 250px;
+            min-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+        .my-received-message-entry {
+            word-wrap: break-word;
+            line-height: 1.4;
+            padding: 5px 0;
+            border-bottom: 1px dotted #e9ecef;
+            display: flex;
+            align-items: baseline;
+            width: 100%;
+        }
+        .my-received-message-entry:last-child {
+            border-bottom: none;
+        }
+        .my-received-message-timestamp {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        .my-received-message-sender {
+            font-weight: bold;
+            color: #0056b3;
+            margin-right: 5px;
+            flex-shrink: 0;
+        }
+        .my-received-message-text {
+            flex-grow: 1;
+            color: #343a40;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* --- Custom styles from your LLM page --- */
+        textarea {
+            width: calc(100% - 20px); /* Adjust for padding */
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        input[type="text"], input[type="number"] {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1em;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        input[type="button"] {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-right: 10px;
+            transition: background-color 0.3s ease;
+        }
+        input[type="button"]:hover {
+            background-color: #0056b3;
+        }
+        input[type="button"]:disabled {
+            background-color: gray;
+            cursor: not-allowed;
+        }
+        details {
+            text-align: left;
+            margin-top: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px 15px;
+            background-color: #f9f9f9;
+        }
+        summary {
+            font-weight: bold;
+            cursor: pointer;
+            padding: 5px 0;
+            outline: none;
+        }
+        #myMathOutput {
+            font-size: 1.5em;
+            border: 1px solid black;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 8px;
+            margin-top: 20px;
+            min-height: 50px;
+            text-align: left;
+            overflow-x: auto; /* Allow horizontal scroll for math output if needed */
+        }
+        #progress {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        /* End custom styles */
     </style>
+    <!-- MathJax for rendering equations -->
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0-alpha.1/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <div class="my-container">
-        <h1>My LLM Agent</h1>
-        <p>This agent is simulating an LLM generating responses.</p>
-        <p>It sends a "fake LLM chat" message to the MCP server every 2 minutes.</p>
-        <div id="myStatus" class="my-status-message">Initializing...</div>
+        <h1 id="myAgentTitle">My LLM Agent</h1>
+        <p>This agent handles direct LLM interactions and communicates with the MCP server.</p>
+        <div id="myStatus" class="my-status-message">Initializing LLM Agent...</div>
+
+        <!-- LLM Model Loading and Question Section -->
+        <h2>LLM Interaction</h2>
+        Open the console. shift-ctrl-i for more info. A single HTML / Javascript Browser LLM. Too big for your cell phone. If you don't want to completely download
+        <a href="https://huggingface.co/onnx-community/DeepSeek-R1-Distill-Qwen-1.5B-ONNX">huggingface.co/onnx-community/DeepSeek-R1-Distill-Qwen-1.5B-ONNX</a> then you should probably close this page.<br><br>
+        It will load from cache if downloaded once. Uses the Web-GPU TransformersJS DeepseekR1 model or other models: <input id="myModelInput" type=text size=60 value="onnx-community/DeepSeek-R1-Distill-Qwen-1.5B-ONNX"> <br><br>
+
+        <input id="myLoadButton" type="button" style="background-color:lime" value="Load Model" onclick="myLoadModel()"> Data warning ~1.4 GB saved to cache<br><br>
+
+        <textarea id="myArea01" rows="5" cols="70" placeholder="Ask your question here">Solve the equation: x^2 - 3x + 2 = 0</textarea><br>
+
+        <details closed> <summary>Click for hyperparameters which may or may not work</summary>
+            <input id="myMaxTokens" type="number" style="width:60px" value="512" placeholder="512" title="The maximum number of words or characters the AI can generate in one response. Setting a low value makes shorter answers, while a high value allows for longer responses.">
+            Max tokens in the answer: kind of cuts off the reply <br>
+            <input id="myTop_p" type="number" style="width:60px" min="0" max="1" step="0.01" value="0.9" placeholder="0.9" title="Limits the AI's choices to the most likely words. A lower value (e.g., 0.5) makes the response more focused, while a higher value (e.g., 0.9) allows for more variety.">
+            Top_p: closer to zero more focused, closer to 1 more variety <br>
+            <input id="myTemperature" type="number" style="width:60px" min="0" max="1" step="0.01" value="0.7" placeholder="0.7" title="Controls how creative the AI is. A low value (e.g., 0.2) makes responses more predictable, while a high value (e.g., 1.0) makes them more random and diverse.">
+            Temperature: Close to 0 more predictable, closer to 1 more diverse <br><br>
+
+            <input id="myTop_k" type="number" style="width:60px" min="0" max="300" step="1" value="50" placeholder="50" title="">
+            Top_k: <br>
+            <input id="myMin_length" type="number" style="width:60px" min="0" max="10000" step="1" value="20" placeholder="20" title="">
+            Min_length: <br>
+            <input id="myRepetition_penalty" type="number" style="width:60px" min="0" max="10" step="0.1" value="1.2" placeholder="1.2" title="">
+            Repetition_penalty: <br>
+            <input id="myLength_penalty" type="number" style="width:60px" min="0" max="10" step="0.1" value="1.5" placeholder="1.5" title="">
+            Length_penalty: <br><br>
+
+            <input id="myDo_sample" type="checkbox" checked title="When turned on, the AI picks words more randomly instead of always choosing the most likely option. This makes responses more varied and creative. If off, the AI sticks to the safest choices.">
+            Do_sample: when selected, picks and considers more token options making it varied and creative, not selected keeps safest token<br>
+            <input id="myChain_of_thought" type="checkbox" checked title="Encourages the AI to explain its reasoning step by step, making answers more detailed and logical. Useful for math, coding, and problem-solving.">
+            Chain_of_thought: AI explains more about it's token creation process.<br>
+            <input id="myEarly_stopping" type="checkbox" checked title="">
+            Early_stopping:<br><br>
+        </details><br>
+
+        <input id="myAskButton" type="button" value="Ask Question" onclick="myAskQuestion()" disabled>
+        <input id="myStopButton" type="button" value="Stop Question" onclick="myStopGeneration()" disabled><br><br>
+        <div id="progress">Loading progress: 0%</div>
+        <br><br>
+
+        <textarea id="myTextarea01" rows="20" style="width:100%;" placeholder="Reply Goes here" READONLY></textarea><br><br>
+
+        <h3>Rendered Output:</h3>
+        <div id="myMathOutput" style="font-size: 1.5em; border: 1px solid black; padding: 10px;">
+            ...
+        </div><br>
+
+        <input type="button" value="Render Math" onclick="myRenderMath()">
+        <input type="button" value="Copy Rendered" onclick="document.getElementById('myMathOutput').select(); document.execCommand('copy');">
+        <input type="button" value="Copy Regular" onclick="document.getElementById('myTextarea01').select(); document.execCommand('copy'); document.getElementById('myKeeparea01').value += '\r\n\r\n'+document.getElementById('myTextarea01').value;">
+        <input type="button" value="Clear" onclick="document.getElementById('myKeeparea01').value =''"><br>
+
+        <textarea id="myKeeparea01" rows="5" style="width:100%;" placeholder="Copy here only when wished" READONLY></textarea><br><br><br>
+
+        Use at your own risk, by <a href="https://www.linkedin.com/in/jeremy-ellis-4237a9bb/">Jeremy Ellis LinkedIn</a><br>
+        Github index at <a href="https://hpssjellis.github.io/my-examples-of-ai-agents/public/index.html">hpssjellis.github.io/my-examples-of-ai-agents/public/index.html</a><br>
+        My transformersjs github where the work was done <a href="https://github.com/hpssjellis/my-examples-of-transformersJS">https://github.com/hpssjellis/my-examples-of-transformersJS</a>
+        My Github <a href="https://github.com/hpssjellis">Profile</a><br>
     </div>
 
-    <script>
-        // Store a reference to the Web Worker
-        let myLLMAgentWorker;
-        // Reference to the status message element
-        let myStatusElement;
+    <!-- Container for messages from MCP Server -->
+    <div class="my-received-messages-container">
+        <h2>Messages from MCP Server</h2>
+        <div class="my-received-chat-options">
+            <input type="checkbox" id="myReceivedAutoScrollCheckbox" checked>
+            <label for="myReceivedAutoScrollCheckbox">Auto-scroll to top</label>
+        </div>
+        <div id="myReceivedMessagesBox" class="my-received-messages-box">
+            <!-- Messages from MCP server will appear here -->
+        </div>
+    </div>
+
+    <script type="module">
+        // Imports for Hugging Face Transformers.js
+        import { pipeline, TextStreamer, InterruptableStoppingCriteria } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1';
+
+        // Needed for buttons to call module functions
+        window.myLoadModel = myLoadModel;
+        window.myAskQuestion = myAskQuestion;
+        window.myStopGeneration = myStopGeneration;
+        window.myRenderMath = myRenderMath;
+
+        let generator;
+        let streamer = null;
+        let myModel;
+        let stoppingCriteria = new InterruptableStoppingCriteria();
+        let myTimerRender;
+
+        let myContent = document.getElementById('myArea01').value;
+        console.log(myContent);
+
+        // Global variable for agent name (from URL)
+        let myAgentName = "DefaultLLM"; // Default name if not provided via URL
+        let myStatusElement; // Reference to the status message div
 
         /**
-         * Initializes the LLM agent, including its Web Worker.
+         * Appends a message to the agent's received messages box.
+         * Messages are added in reverse order.
+         * @param {string} mySenderName - The name of the sender.
+         * @param {string} myMessageText - The text of the message.
+         */
+        function myAppendReceivedMessage(mySenderName, myMessageText) {
+            const myReceivedMessagesBox = document.getElementById('myReceivedMessagesBox');
+            const myMessageEntry = document.createElement('div');
+            myMessageEntry.className = 'my-received-message-entry';
+
+            const myTimestamp = new Date().toLocaleTimeString();
+
+            myMessageEntry.innerHTML = `
+                <span class="my-received-message-timestamp">[${myTimestamp}]</span>
+                <span class="my-received-message-sender">${mySenderName}:</span>
+                <span class="my-received-message-text">${myMessageText}</span>
+            `;
+
+            const myAutoScrollCheckbox = document.getElementById('myReceivedAutoScrollCheckbox');
+            const myIsAutoScrollEnabled = myAutoScrollCheckbox.checked;
+
+            const myMaxScrollTop = myReceivedMessagesBox.scrollHeight - myReceivedMessagesBox.clientHeight;
+            const myIsCurrentlyAtVisualTop = myReceivedMessagesBox.scrollTop >= (myMaxScrollTop - 5);
+
+            myReceivedMessagesBox.appendChild(myMessageEntry);
+
+            if (myIsAutoScrollEnabled && myIsCurrentlyAtVisualTop) {
+                myReceivedMessagesBox.scrollTop = myReceivedMessagesBox.scrollHeight - myReceivedMessagesBox.clientHeight;
+            }
+        }
+
+        // Create a text generation pipeline
+        async function myLoadModel() {
+            myStatusElement.textContent = 'Loading LLM Model...';
+            myModel = document.getElementById('myModelInput').value;
+            const progressCallback = (progress) => {
+                const myProg = parseInt(progress.progress);
+                document.getElementById('progress').textContent = `Loading: ${progress.file} at ${myProg}%`;
+            };
+
+            try {
+                generator = await pipeline("text-generation", myModel, { dtype: "q4f16", device: "webgpu", progress_callback: progressCallback });
+                document.getElementById('myLoadButton').disabled = true;
+                document.getElementById('myLoadButton').style.backgroundColor = 'gray';
+                document.getElementById('myAskButton').style.backgroundColor = 'lime';
+                document.getElementById('myAskButton').disabled = false;
+                document.getElementById('myStopButton').disabled = true;
+                document.getElementById('progress').textContent = `Loading: Done! Model "${myModel}" loaded.`;
+            } catch (error) {
+                console.error("My: Error loading model:", error);
+                myStatusElement.textContent = `Error loading model: ${error.message}`;
+                document.getElementById('myLoadButton').disabled = false;
+                document.getElementById('myLoadButton').style.backgroundColor = 'lime';
+            }
+        }
+
+        async function myAskQuestion() {
+            window.startTime = performance.now();
+            myTimerRender = setInterval(myRenderMath, 3000);
+            document.getElementById('myTextarea01').value = ''; // erase the response box
+            document.getElementById('myAskButton').disabled = true;
+            document.getElementById('myStopButton').disabled = false;
+            myContent = document.getElementById('myArea01').value;
+            const messages = [{ role: "user", content: myContent }];
+
+            let myTemp = ""; // Temporary storage for text
+            let myCount = 0; // Counter to track updates
+            let myTextarea = document.getElementById('myTextarea01');
+
+            streamer = new TextStreamer(generator.tokenizer, {
+                skip_prompt: true,
+                callback_function: (text) => {
+                    const currentTime = performance.now();
+                    const elapsedTime = (currentTime - window.startTime) / 1000;
+
+                    myTemp += text;
+                    myCount++;
+                    if (myCount >= 5) { // Update textarea every x tokens to speed it up
+                        myTextarea.value += myTemp;
+                        myTemp = "";
+                        myCount = 0;
+
+                        if (document.activeElement !== myTextarea) {
+                            myTextarea.scrollTop = myTextarea.scrollHeight; // Auto-scroll to bottom
+                        }
+                    }
+
+                    const generatedTokens = document.getElementById('myTextarea01').value.length;
+                    const tokensPerSecond = generatedTokens / elapsedTime;
+                    const progress = parseInt((generatedTokens * 10) / (myMaxT || 1)); // Added || 1 to prevent division by zero
+                    document.getElementById('progress').textContent = `Answer progress: ~${progress}%, Tokens per second: ${tokensPerSecond.toFixed(0)}, elapsed time: ${elapsedTime.toFixed(0)} seconds`;
+
+                    if (progress >= 100) {
+                        window.startTime = null;
+                    }
+                },
+            });
+
+            const myMaxT = parseInt(document.getElementById('myMaxTokens').value);
+            const myDo_sample = document.getElementById('myDo_sample').checked; // Changed to .checked
+            const myTop_p = parseFloat(document.getElementById('myTop_p').value);
+            const myTemperature = parseFloat(document.getElementById('myTemperature').value);
+            const myChain_of_thought = document.getElementById('myChain_of_thought').checked; // Changed to .checked
+
+            const myTop_k = parseInt(document.getElementById('myTop_k').value);
+            const myMin_length = parseInt(document.getElementById('myMin_length').value);
+            const myRepetition_penalty = parseFloat(document.getElementById('myRepetition_penalty').value);
+            const myLength_penalty = parseFloat(document.getElementById('myLength_penalty').value);
+            const myEarly_stopping = document.getElementById('myEarly_stopping').checked; // Changed to .checked
+
+
+            console.log(`maxT:${myMaxT}, do-sample:${myDo_sample}, top_p:${myTop_p}, temp:${myTemperature}, chain-of-thought:${myChain_of_thought}`);
+
+            stoppingCriteria = new InterruptableStoppingCriteria();
+
+            try {
+                const output = await generator(messages, {
+                    max_new_tokens: myMaxT,
+                    do_sample: myDo_sample,
+                    top_p: myTop_p,
+                    temperature: myTemperature,
+                    top_k: myTop_k,
+                    min_length: myMin_length,
+                    repetition_penalty: myRepetition_penalty,
+                    length_penalty: myLength_penalty,
+                    early_stopping: myEarly_stopping,
+                    num_return_sequences: 1,
+                    streamer,
+                    chain_of_thought: myChain_of_thought,
+                    stopping_criteria: stoppingCriteria,
+                });
+
+                if (!stoppingCriteria.interrupted) {
+                    let fullReply = output[0].generated_text.at(-1).content;
+                    let myReply = fullReply.replace(/<think>/g, "").replace(/<\/think>/g, "\r\n\r\nResponse: ").replace(/```/g, "");
+                    document.getElementById('myTextarea01').value = `Asking: ${myContent}\r\n\r\nAnswer: ${myReply}`;
+
+                    // --- NEW: Send LLM's full reply to MCP server ---
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'llm_response', // Specific type for LLM responses
+                            senderName: myAgentName,
+                            message: `LLM Response to "${myContent.substring(0, 50)}...": ${myReply.substring(0, 150)}...` // Send a summary or full message
+                        }, '*');
+                        myStatusElement.textContent = `LLM response sent to MCP.`;
+                    }
+                    // --- END NEW ---
+                }
+            } catch (error) {
+                if (stoppingCriteria.interrupted) {
+                    console.log('Generation was stopped.');
+                } else {
+                    console.error('Error during generation:', error);
+                    myStatusElement.textContent = `Error during generation: ${error.message}`;
+                }
+            } finally {
+                clearInterval(myTimerRender);
+                myRenderMath(); // Just to do it one last time
+                document.getElementById('myAskButton').disabled = false;
+                document.getElementById('myStopButton').disabled = true;
+                console.log('Generation finished or stopped.');
+            }
+        }
+
+        async function myRenderMath() {
+            let myMathText = document.getElementById("myTextarea01").value;
+            myMathText = myMathText.replace(/^###\s*(.*)$/gm, "<h2>$1</h2>");
+            myMathText = myMathText.replace(/\r\n|\n|\r/g, ' <br> ');
+            myMathText = myMathText.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+
+            let myMathDiv = document.getElementById("myMathOutput");
+            myMathDiv.innerHTML = myMathText;
+
+            // Ensure MathJax is loaded before typesetting
+            if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+                await MathJax.typesetPromise([myMathDiv]);
+            } else {
+                console.warn("My: MathJax not yet loaded or typesetPromise not available.");
+            }
+        }
+
+        function myStopGeneration() {
+            clearInterval(myTimerRender);
+            if (stoppingCriteria) {
+                 stoppingCriteria.interrupt(); // Gracefully stop the generation
+            }
+            document.getElementById('progress').textContent = 'Generation stopped.';
+            document.getElementById('myAskButton').disabled = false;
+            document.getElementById('myStopButton').disabled = true;
+            console.log('Stopped.');
+        }
+
+        /**
+         * Initializes the LLM agent, including getting its name from the URL.
          */
         async function myInitLLMAgent() {
             myStatusElement = document.getElementById('myStatus');
-            myStatusElement.textContent = 'Starting LLM Agent Worker...';
+            myStatusElement.textContent = 'Initializing LLM Agent...';
+
+            // Get agent name from URL parameter
+            const myUrlParams = new URLSearchParams(window.location.search);
+            const myNameFromUrl = myUrlParams.get('agentName');
+            if (myNameFromUrl) {
+                myAgentName = decodeURIComponent(myNameFromUrl);
+                document.getElementById('myAgentTitle').textContent = `My LLM Agent (${myAgentName})`;
+            }
 
             try {
-                // Check if window.opener exists, meaning it was opened by another window (the MCP server)
                 if (window.opener) {
                     console.log('My: LLM Agent running. Opener window detected.');
-                    // Create a new Web Worker instance using the combined web-worker.js
-                    myLLMAgentWorker = new Worker('web-worker.js');
 
-                    // Set up listener for messages FROM the worker
-                    myLLMAgentWorker.onmessage = async function(myEvent) {
-                        console.log('My: LLM Agent received message from worker:', myEvent.data);
-                        // The worker sends the message, this main thread relays it to the MCP server
-                        // The type 'llm_chat' helps the MCP server identify the sender.
-                        window.opener.postMessage({ type: 'llm_chat', message: myEvent.data }, '*');
-                        myStatusElement.textContent = `Last sent: "${myEvent.data}" at ${new Date().toLocaleTimeString()}`;
+                    // --- Optional: Use web-worker.js for background tasks if needed ---
+                    // For now, it will just confirm it started. Actual LLM generation is on main thread.
+                    const worker = new Worker('web-worker.js');
+                    worker.onmessage = function(event) {
+                        console.log('My: LLM Agent received message from worker (confirmation):', event.data);
+                        // You could display this confirmation in the status message if desired
                     };
-
-                    // Set up listener for worker errors
-                    myLLMAgentWorker.onerror = function(myError) {
-                        console.error('My: LLM Agent Worker error:', myError);
-                        myStatusElement.textContent = `Error in worker: ${myError.message}`;
+                    worker.onerror = function(error) {
+                        console.error('My: LLM Agent Worker error:', error);
                     };
+                    worker.postMessage({ type: 'init_agent', agentType: 'llm', agentName: myAgentName });
+                    // --- End Optional Worker Use ---
 
-                    // Send an initialization message to the worker, telling it its type
-                    myLLMAgentWorker.postMessage({ type: 'init_agent', agentType: 'llm' });
-
-                    myStatusElement.textContent = 'LLM Agent Worker started. Sending fake chats every 2 minutes.';
+                    myStatusElement.textContent = `LLM Agent "${myAgentName}" initialized. Load model to start.`;
 
                 } else {
                     myStatusElement.textContent = 'LLM Agent running in standalone mode (no opener detected).';
@@ -104,14 +529,25 @@
             }
         }
 
-        // Initialize the agent when the page loads
+        /**
+         * Handles incoming messages from the MCP server.
+         * @param {MessageEvent} myEvent - The message event object.
+         */
+        window.onmessage = async function(myEvent) {
+            if (myEvent.data && typeof myEvent.data === 'object' && myEvent.data.senderName && myEvent.data.message) {
+                myAppendReceivedMessage(myEvent.data.senderName, myEvent.data.message);
+            } else {
+                console.warn('My: LLM Agent received an unrecognized message format from MCP:', myEvent.data);
+            }
+        };
+
         window.onload = async function() {
             await myInitLLMAgent();
         };
 
         // Add a simple Inter font link
         const myFontLink = document.createElement('link');
-        myFontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap';
+        myFontLink.href = '[https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap)';
         myFontLink.rel = 'stylesheet';
         document.head.appendChild(myFontLink);
     </script>
