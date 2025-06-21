@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My IMU Agent</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #fff3e6; /* Light orange background */
+            color: #212529;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .my-container {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            color: #ff9800;
+        }
+        p {
+            margin-top: 15px;
+            font-size: 1.1em;
+            color: #495057;
+        }
+        .my-status-message {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #d6e9c6; /* Light green for status */
+            border: 1px solid #b2dba1;
+            border-radius: 5px;
+            color: #3c763d;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="my-container">
+        <h1>My IMU Agent</h1>
+        <p>This agent is simulating IMU motion data.</p>
+        <p>It sends a "fake IMU chat" message to the MCP server every 2 minutes.</p>
+        <div id="myStatus" class="my-status-message">Initializing...</div>
+    </div>
+
+    <script>
+        // Store a reference to the Web Worker
+        let myIMUAgentWorker;
+        // Reference to the status message element
+        let myStatusElement;
+
+        /**
+         * Initializes the IMU agent, including its Web Worker.
+         */
+        async function myInitIMUAgent() {
+            myStatusElement = document.getElementById('myStatus');
+            myStatusElement.textContent = 'Starting IMU Agent Worker...';
+
+            try {
+                // Check if window.opener exists, meaning it was opened by another window (the MCP server)
+                if (window.opener) {
+                    console.log('My: IMU Agent running. Opener window detected.');
+                    // Create a new Web Worker instance
+                    myIMUAgentWorker = new Worker('imu-agent-worker.js');
+
+                    // Set up listener for messages FROM the worker
+                    myIMUAgentWorker.onmessage = async function(myEvent) {
+                        console.log('My: IMU Agent received message from worker:', myEvent.data);
+                        // The worker sends the message, this main thread relays it to the MCP server
+                        // The type 'imu_chat' helps the MCP server identify the sender.
+                        window.opener.postMessage({ type: 'imu_chat', message: myEvent.data }, '*');
+                        myStatusElement.textContent = `Last sent: "${myEvent.data}" at ${new Date().toLocaleTimeString()}`;
+                    };
+
+                    // Set up listener for messages TO the worker (e.g., from MCP if needed later)
+                    myIMUAgentWorker.onerror = function(myError) {
+                        console.error('My: IMU Agent Worker error:', myError);
+                        myStatusElement.textContent = `Error in worker: ${myError.message}`;
+                    };
+
+                    // Tell the worker to start its periodic fake chat messages
+                    myIMUAgentWorker.postMessage('start_fake_chat_interval');
+
+                    myStatusElement.textContent = 'IMU Agent Worker started. Sending fake chats every 2 minutes.';
+
+                } else {
+                    myStatusElement.textContent = 'IMU Agent running in standalone mode (no opener detected).';
+                    console.warn('My: IMU Agent opened directly, not via MCP server. Communication to opener will not work.');
+                }
+            } catch (myError) {
+                console.error('My: Error initializing IMU Agent:', myError);
+                myStatusElement.textContent = `Error: ${myError.message}. Check console.`;
+            }
+        }
+
+        // Initialize the agent when the page loads
+        window.onload = async function() {
+            await myInitIMUAgent();
+        };
+
+        // Add a simple Inter font link
+        const myFontLink = document.createElement('link');
+        myFontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap';
+        myFontLink.rel = 'stylesheet';
+        document.head.appendChild(myFontLink);
+    </script>
+</body>
+</html>
