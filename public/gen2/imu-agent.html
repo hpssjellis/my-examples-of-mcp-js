@@ -71,8 +71,8 @@
                 // Check if window.opener exists, meaning it was opened by another window (the MCP server)
                 if (window.opener) {
                     console.log('My: IMU Agent running. Opener window detected.');
-                    // Create a new Web Worker instance
-                    myIMUAgentWorker = new Worker('imu-agent-worker.js');
+                    // Create a new Web Worker instance using the combined web-worker.js
+                    myIMUAgentWorker = new Worker('web-worker.js');
 
                     // Set up listener for messages FROM the worker
                     myIMUAgentWorker.onmessage = async function(myEvent) {
@@ -83,14 +83,14 @@
                         myStatusElement.textContent = `Last sent: "${myEvent.data}" at ${new Date().toLocaleTimeString()}`;
                     };
 
-                    // Set up listener for messages TO the worker (e.g., from MCP if needed later)
+                    // Set up listener for worker errors
                     myIMUAgentWorker.onerror = function(myError) {
                         console.error('My: IMU Agent Worker error:', myError);
                         myStatusElement.textContent = `Error in worker: ${myError.message}`;
                     };
 
-                    // Tell the worker to start its periodic fake chat messages
-                    myIMUAgentWorker.postMessage('start_fake_chat_interval');
+                    // Send an initialization message to the worker, telling it its type
+                    myIMUAgentWorker.postMessage({ type: 'init_agent', agentType: 'imu' });
 
                     myStatusElement.textContent = 'IMU Agent Worker started. Sending fake chats every 2 minutes.';
 
