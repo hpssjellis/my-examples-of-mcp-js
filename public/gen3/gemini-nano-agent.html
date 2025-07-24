@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Gemini Nano Agent</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #e6ffe6; /* Light green background for Gemini Nano */
+            color: #212529;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .my-container {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 700px; /* Adjusted max-width for content */
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #28a745; /* Green for Gemini Nano agent */
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        p {
+            margin-top: 5px;
+            font-size: 1em;
+            color: #495057;
+        }
+        .my-status-message {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            color: #155724;
+            font-weight: bold;
+            text-align: left;
+            word-wrap: break-word;
+        }
+
+        /* Styling for the agent's received messages box */
+        .my-received-messages-container {
+            width: 100%;
+            max-width: 700px; /* Matches main container */
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: left;
+            margin-top: 20px;
+        }
+        .my-received-messages-container h2 {
+            margin-top: 0;
+            color: #28a745; /* Green for Gemini Nano agent */
+            font-size: 1.2em;
+        }
+        .my-received-chat-options {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            justify-content: flex-end;
+            font-size: 0.9em;
+        }
+        .my-received-chat-options input[type="checkbox"] {
+            margin-right: 5px;
+            transform: scale(1.1);
+        }
+        .my-received-messages-box {
+            max-height: 250px;
+            min-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+        .my-received-message-entry {
+            word-wrap: break-word;
+            line-height: 1.4;
+            padding: 5px 0;
+            border-bottom: 1px dotted #e9ecef;
+            display: flex;
+            align-items: baseline;
+            width: 100%;
+        }
+        .my-received-message-entry:last-child {
+            border-bottom: none;
+        }
+        .my-received-message-timestamp {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        .my-received-message-sender {
+            font-weight: bold;
+            color: #0056b3; /* Consistent sender color */
+            margin-right: 5px;
+            flex-shrink: 0;
+        }
+        .my-received-message-text {
+            flex-grow: 1;
+            color: #343a40;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* LLM specific styles */
+        textarea {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+        input[type="text"], input[type="number"] {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1em;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        input[type="button"] {
+            background-color: #28a745; /* Green for Gemini Nano buttons */
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-right: 10px;
+            transition: background-color 0.3s ease;
+        }
+        input[type="button"]:hover {
+            background-color: #218838;
+        }
+        input[type="button"]:disabled {
+            background-color: gray;
+            cursor: not-allowed;
+        }
+        details {
+            text-align: left;
+            margin-top: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px 15px;
+            background-color: #f9f9f9;
+        }
+        summary {
+            font-weight: bold;
+            cursor: pointer;
+            padding: 5px 0;
+            outline: none;
+        }
+        #progress {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="my-container">
+        <h1 id="myAgentTitle">My Gemini Nano Agent</h1>
+        <p>This agent uses Chrome's native Gemini Nano API for local LLM interactions.</p>
+        <div id="myStatus" class="my-status-message">Initializing Gemini Nano Agent...</div>
+
+        <h2>Gemini Nano Interaction</h2>
+        <p>
+            This agent leverages the Gemini Nano API, available directly in compatible Chrome browsers.
+            No large model downloads are required.
+        </p>
+
+        <input id="myLoadButton" type="button" value="Initialize Gemini Nano" onclick="myInitGeminiNanoSession()">
+        <span id="progress">Status: Not initialized.</span>
+        <br><br>
+
+        <textarea id="myArea01" rows="5" placeholder="Ask your question here...">
+Tell me a short story about a brave knight and a mischievous dragon.
+        </textarea><br>
+
+        <details closed> <summary>Click for generation parameters</summary>
+            <input id="myTemperature" type="number" style="width:60px" min="0" max="1" step="0.01" value="0.7" placeholder="0.7" title="Controls the randomness of the output. Higher values mean more random, lower values mean more deterministic.">
+            Temperature: (0.0 - 1.0) <br>
+            <input id="myMaxOutputTokens" type="number" style="width:60px" value="200" placeholder="200" title="The maximum number of tokens to generate in the response.">
+            Max Output Tokens: <br>
+        </details><br>
+
+        <input id="myAskButton" type="button" value="Ask Question" onclick="myAskQuestion()" disabled>
+        <input id="myStopButton" type="button" value="Stop Generation" onclick="myStopGeneration()" disabled><br><br>
+
+        <textarea id="myTextarea01" rows="15" style="width:100%;" placeholder="Gemini Nano's reply will appear here" READONLY></textarea><br><br>
+
+        <input type="button" value="Copy Reply" onclick="document.getElementById('myTextarea01').select(); document.execCommand('copy');">
+        <input type="button" value="Clear Reply" onclick="document.getElementById('myTextarea01').value = '';">
+    </div>
+
+    <!-- Container for messages from MCP Server -->
+    <div class="my-received-messages-container">
+        <h2>Messages from MCP Server</h2>
+        <div class="my-received-chat-options">
+            <input type="checkbox" id="myReceivedAutoScrollCheckbox" checked>
+            <label for="myReceivedAutoScrollCheckbox">Auto-scroll to top</label>
+        </div>
+        <div id="myReceivedMessagesBox" class="my-received-messages-box">
+            <!-- Messages from MCP server will appear here -->
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let myAgentName = "GeminiNanoAgent"; // Default name if not provided via URL
+        let myStatusElement; // Reference to the status message div
+        let myProgressElement; // Reference to the progress span
+        let myGeminiModel = null; // Stores the Gemini Nano generative model
+        let myAbortController = null; // For stopping generation (though generateContent is non-streaming)
+
+        // Expose functions to the global scope for HTML onclick attributes
+        window.myInitGeminiNanoSession = myInitGeminiNanoSession;
+        window.myAskQuestion = myAskQuestion;
+        window.myStopGeneration = myStopGeneration; // Still include for consistency, though less relevant for non-streaming
+
+        /**
+         * Appends a message to the agent's received messages box.
+         * Messages are added in reverse order.
+         * @param {string} mySenderName - The name of the sender.
+         * @param {string} myMessageText - The text of the message.
+         */
+        function myAppendReceivedMessage(mySenderName, myMessageText) {
+            const myReceivedMessagesBox = document.getElementById('myReceivedMessagesBox');
+            const myMessageEntry = document.createElement('div');
+            myMessageEntry.className = 'my-received-message-entry';
+
+            const myTimestamp = new Date().toLocaleTimeString();
+
+            myMessageEntry.innerHTML = `
+                <span class="my-received-message-timestamp">[${myTimestamp}]</span>
+                <span class="my-received-message-sender">${mySenderName}:</span>
+                <span class="my-received-message-text">${myMessageText}</span>
+            `;
+
+            const myAutoScrollCheckbox = document.getElementById('myReceivedAutoScrollCheckbox');
+            const myIsAutoScrollEnabled = myAutoScrollCheckbox.checked;
+
+            const myMaxScrollTop = myReceivedMessagesBox.scrollHeight - myReceivedMessagesBox.clientHeight;
+            const myIsCurrentlyAtVisualTop = myReceivedMessagesBox.scrollTop >= (myMaxScrollTop - 5);
+
+            myReceivedMessagesBox.appendChild(myMessageEntry);
+
+            if (myIsAutoScrollEnabled && myIsCurrentlyAtVisualTop) {
+                myReceivedMessagesBox.scrollTop = myReceivedMessagesBox.scrollHeight - myReceivedMessagesBox.clientHeight;
+            }
+        }
+
+        /**
+         * Initializes the Gemini Nano generative model.
+         */
+        async function myInitGeminiNanoSession() {
+            myStatusElement.textContent = 'Attempting to initialize Gemini Nano model...';
+            myProgressElement.textContent = 'Checking API availability...';
+            document.getElementById('myLoadButton').disabled = true;
+
+            try {
+                if ('ai' in navigator && 'getGenerativeModel' in navigator.ai) {
+                    // Use getGenerativeModel to access the 'gemini-nano' model
+                    myGeminiModel = await navigator.ai.getGenerativeModel({ model: 'gemini-nano' });
+                    myStatusElement.textContent = 'Gemini Nano model loaded. Ready to generate.';
+                    myProgressElement.textContent = 'Ready.';
+                    document.getElementById('myAskButton').disabled = false;
+                    document.getElementById('myAskButton').style.backgroundColor = '#28a745';
+                } else {
+                    myStatusElement.textContent = 'Gemini Nano API (getGenerativeModel) not available in this browser. Please use a compatible Chrome version.';
+                    myProgressElement.textContent = 'API not found.';
+                    console.error('Gemini Nano API (getGenerativeModel) not available.');
+                    document.getElementById('myLoadButton').disabled = false; // Allow retry
+                }
+            } catch (error) {
+                myStatusElement.textContent = `Error loading model: ${error.message}`;
+                myProgressElement.textContent = 'Initialization failed.';
+                console.error('Error loading Gemini Nano model:', error);
+                document.getElementById('myLoadButton').disabled = false; // Allow retry
+            }
+        }
+
+        /**
+         * Sends a question to Gemini Nano and displays the response.
+         */
+        async function myAskQuestion() {
+            if (!myGeminiModel) {
+                myStatusElement.textContent = 'Gemini Nano model not initialized. Click "Initialize Gemini Nano" first.';
+                return;
+            }
+
+            const prompt = document.getElementById('myArea01').value.trim();
+            if (!prompt) {
+                myStatusElement.textContent = 'Please enter a question.';
+                return;
+            }
+
+            document.getElementById('myTextarea01').value = ''; // Clear previous reply
+            myStatusElement.textContent = 'Generating response...';
+            myProgressElement.textContent = 'Generating...';
+            document.getElementById('myAskButton').disabled = true;
+            document.getElementById('myStopButton').disabled = true; // Stop button less relevant for non-streaming
+
+            // Generation parameters
+            const temperature = parseFloat(document.getElementById('myTemperature').value);
+            const maxOutputTokens = parseInt(document.getElementById('myMaxOutputTokens').value);
+
+            try {
+                const result = await myGeminiModel.generateContent(prompt, {
+                    temperature: temperature,
+                    maxOutputTokens: maxOutputTokens
+                });
+
+                const fullResponseText = result.text; // Access the text property of the result
+                document.getElementById('myTextarea01').value = fullResponseText;
+                document.getElementById('myTextarea01').scrollTop = document.getElementById('myTextarea01').scrollHeight; // Auto-scroll
+
+                myStatusElement.textContent = 'Generation complete.';
+                myProgressElement.textContent = 'Done.';
+
+                // Send the full response to the MCP server
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'gemini_nano_response', // Specific type for Gemini Nano responses
+                        senderName: myAgentName,
+                        message: `Gemini Nano Reply to "${prompt.substring(0, 50)}...": ${fullResponseText.substring(0, 150)}...` // Send a summary
+                    }, '*');
+                    console.log(`My: Gemini Nano Agent sent response to MCP: ${fullResponseText.substring(0, 50)}...`);
+                }
+
+            } catch (error) {
+                myStatusElement.textContent = `Error during generation: ${error.message}`;
+                myProgressElement.textContent = 'Error.';
+                console.error('Error during Gemini Nano generation:', error);
+            } finally {
+                document.getElementById('myAskButton').disabled = false;
+                document.getElementById('myStopButton').disabled = true;
+            }
+        }
+
+        /**
+         * Stops the ongoing Gemini Nano text generation.
+         * (Less relevant for non-streaming generateContent, but kept for consistency)
+         */
+        function myStopGeneration() {
+            // For generateContent, there's no direct way to "stop" an in-progress request
+            // like with promptStreaming's AbortController.
+            // This function would primarily be useful if you were using a streaming API.
+            myStatusElement.textContent = 'Stopping generation (not applicable for current API).';
+            myProgressElement.textContent = 'Stopping...';
+            document.getElementById('myStopButton').disabled = true;
+        }
+
+        /**
+         * Initializes the Gemini Nano agent on page load.
+         */
+        window.onload = async function() {
+            myStatusElement = document.getElementById('myStatus');
+            myProgressElement = document.getElementById('progress');
+
+            // Get agent name from URL parameter
+            const myUrlParams = new URLSearchParams(window.location.search);
+            const myNameFromUrl = myUrlParams.get('agentName');
+            if (myNameFromUrl) {
+                myAgentName = decodeURIComponent(myNameFromUrl);
+                document.getElementById('myAgentTitle').textContent = `My Gemini Nano Agent (${myAgentName})`;
+            }
+
+            // Check if there's an opener and set initial status
+            if (window.opener) {
+                myStatusElement.textContent = `Gemini Nano Agent "${myAgentName}" ready. Click "Initialize" to start.`;
+                console.log('My: Gemini Nano Agent running. Opener window detected.');
+            } else {
+                myStatusElement.textContent = 'Gemini Nano Agent running in standalone mode (no opener detected).';
+                console.warn('My: Gemini Nano Agent opened directly, not via MCP server. Communication to opener will not work.');
+            }
+        };
+
+        /**
+         * Handles incoming messages from the MCP server.
+         * @param {MessageEvent} myEvent - The message event object.
+         */
+        window.onmessage = async function(myEvent) {
+            // Ensure the message is from a trusted origin in a real application
+            if (myEvent.data && typeof myEvent.data === 'object' && myEvent.data.senderName && myEvent.data.message) {
+                myAppendReceivedMessage(myEvent.data.senderName, myEvent.data.message);
+            } else {
+                console.warn('My: Gemini Nano Agent received an unrecognized message format from MCP:', myEvent.data);
+            }
+        };
+
+        // Add Inter font link
+        const myFontLink = document.createElement('link');
+        myFontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap';
+        myFontLink.rel = 'stylesheet';
+        document.head.appendChild(myFontLink);
+    </script>
+</body>
+</html>
