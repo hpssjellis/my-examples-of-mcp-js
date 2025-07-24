@@ -100,6 +100,24 @@
             color: #0c5460;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
         }
+
+        /* New section for sending messages to external agents */
+        .my-send-to-agents-container {
+            margin-top: 25px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+            text-align: left;
+        }
+        .my-send-to-agents-container textarea {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            box-sizing: border-box;
+            min-height: 80px;
+        }
+
         /* Responsive adjustments */
         @media (max-width: 600px) {
             .my-container {
@@ -119,7 +137,7 @@
         <!-- Buttons to manage agents -->
         <div class="my-button-group">
             <button class="my-button" onclick="myOpenChatAgent()">Open Inline Chat Agent</button>
-            <button class="my-button" onclick="myOpenLLMAgent()">Open LLM Agent</button>
+            <button class="my-button" onclick="myOpenLLMAgent()">Open Gemini Nano Agent</button> <!-- Updated button text -->
             <button class="my-button" onclick="myOpenIMUAgent()">Open IMU Agent</button>
         </div>
 
@@ -133,10 +151,17 @@
 
         <!-- Container for messages from LLM/IMU agents -->
         <div class="my-agent-messages-container">
-            <h2>My Agent Messages</h2>
+            <h2>My Agent Messages (Received from LLM/IMU)</h2>
             <div id="myAgentMessagesArea">
                 <!-- Messages from LLM/IMU agents will appear here -->
             </div>
+        </div>
+
+        <!-- New: Container for sending messages to external agents -->
+        <div class="my-send-to-agents-container">
+            <h2>Send Message to External Agents</h2>
+            <textarea id="myExternalAgentMessageInput" placeholder="Type message to send to all LLM/IMU agents..."></textarea>
+            <button class="my-button" onclick="mySendMessageToAllExternalAgents()">Broadcast to Agents</button>
         </div>
     </div>
 
@@ -165,7 +190,7 @@
 
             // Add a heading for the agent
             myAgentDiv.innerHTML = `
-                <h3>Chat Agent ${myChatAgentIdCounter}</h3>
+                <h3>Inline Chat Agent ${myChatAgentIdCounter}</h3>
                 <div class="my-chat-messages" id="myChatMessages-${myAgentId}"></div>
                 <input type="text" class="my-chat-agent-input" id="myChatInput-${myAgentId}" placeholder="Type your message..." />
                 <button class="my-button" style="margin-top: 10px; padding: 8px 15px; font-size: 14px;" onclick="mySendMessageFromInlineAgent('${myAgentId}')">Send</button>
@@ -176,7 +201,7 @@
             // Store agent data
             myInlineChatAgents.push({
                 id: myAgentId,
-                name: `Chat Agent ${myChatAgentIdCounter}`,
+                name: `Inline Agent ${myChatAgentIdCounter}`,
                 messages: []
             });
 
@@ -223,6 +248,9 @@
                 }
             });
 
+            // NEW: Also send this message to all external LLM/IMU agents
+            mySendMessageToAllExternalAgents(myFullMessage, mySenderAgent.name);
+
             // Clear the input field
             myInputField.value = '';
             console.log(`My: Message sent from ${myAgentId}: "${myMessage}"`);
@@ -248,17 +276,17 @@
         }
 
         /**
-         * Opens the LLM agent page in a new tab.
-         * It passes its own origin so the LLM agent can message back.
+         * Opens the Gemini Nano agent page in a new tab.
+         * It passes its own origin so the agent can message back.
          */
         async function myOpenLLMAgent() {
-            // Open the LLM agent page in a new tab
-            const myNewWindow = window.open('llm-agent.html', '_blank', 'width=500,height=400');
+            // Open the Gemini Nano agent page in a new tab
+            const myNewWindow = window.open('gemini-nano-agent.html', '_blank', 'width=750,height=700'); // Adjusted size for Gemini Nano agent
             if (myNewWindow) {
                 myOpenedAgentWindows.push(myNewWindow);
-                console.log('My: LLM Agent tab opened.');
+                console.log('My: Gemini Nano Agent tab opened.');
             } else {
-                console.error('My: Could not open LLM Agent tab. Pop-ups might be blocked.');
+                console.error('My: Could not open Gemini Nano Agent tab. Pop-ups might be blocked.');
             }
         }
 
@@ -268,7 +296,7 @@
          */
         async function myOpenIMUAgent() {
             // Open the IMU agent page in a new tab
-            const myNewWindow = window.open('imu-agent.html', '_blank', 'width=500,height=400');
+            const myNewWindow = window.open('imu-agent.html', '_blank', 'width=500,height=500'); // Adjusted size for IMU agent
             if (myNewWindow) {
                 myOpenedAgentWindows.push(myNewWindow);
                 console.log('My: IMU Agent tab opened.');
@@ -276,6 +304,50 @@
                 console.error('My: Could not open IMU Agent tab. Pop-ups might be blocked.');
             }
         }
+
+        /**
+         * Sends a message from the MCP server to all currently opened external agents.
+         * @param {string} [messageContent] - Optional. The message content. If not provided, it takes from the input field.
+         * @param {string} [senderName='MCP Server'] - Optional. The name of the sender.
+         */
+        async function mySendMessageToAllExternalAgents(messageContent, senderName = 'MCP Server') {
+            const myMessageInput = document.getElementById('myExternalAgentMessageInput');
+            const messageToSend = messageContent || myMessageInput.value.trim();
+
+            if (messageToSend === '') {
+                return; // Do nothing if the message is empty
+            }
+
+            // Filter out closed windows
+            myOpenedAgentWindows = myOpenedAgentWindows.filter(win => win && !win.closed);
+
+            if (myOpenedAgentWindows.length === 0) {
+                console.warn('My: No external agent windows are open to send messages to.');
+                return;
+            }
+
+            myOpenedAgentWindows.forEach(agentWindow => {
+                try {
+                    // Post the message to each agent window.
+                    // The targetOrigin '*' means any origin. In a real application,
+                    // you would specify the exact origin of your agent pages for security.
+                    agentWindow.postMessage({
+                        type: 'mcp_chat', // Custom type for messages from MCP
+                        senderName: senderName,
+                        message: messageToSend
+                    }, '*');
+                    console.log(`My: MCP Server sent message to an agent: "${messageToSend}"`);
+                } catch (error) {
+                    console.error('My: Error sending message to agent window:', error);
+                }
+            });
+
+            // Clear the input field if the message was manually entered
+            if (!messageContent) {
+                myMessageInput.value = '';
+            }
+        }
+
 
         /**
          * Handles incoming messages from any source (expected from agent tabs).
@@ -296,20 +368,42 @@
         /**
          * Processes an incoming message from an agent.
          * Displays the message in the agent messages area.
+         * NEW: Also forwards the message to other external agents.
          * @param {object} myMessageData - The data object sent from the agent.
-         * @param {string} myMessageData.type - The type of message (e.g., 'llm_chat', 'imu_chat').
+         * @param {string} myMessageData.type - The type of message (e.g., 'llm_chat', 'imu_chat', 'gemini_nano_response').
          * @param {string} myMessageData.message - The actual message content.
+         * @param {string} myMessageData.senderName - The name of the sending agent.
          */
         async function myProcessIncomingAgentMessage(myMessageData) {
             myMessageCounter++;
             const myAgentMessagesArea = document.getElementById('myAgentMessagesArea');
             const myMessageEntry = document.createElement('div');
             myMessageEntry.className = 'my-agent-message';
-            myMessageEntry.innerHTML = `<strong>[${myMessageCounter}] ${myMessageData.type.toUpperCase()}:</strong> ${myMessageData.message} <small style="float: right; color: #6c757d;">${new Date().toLocaleTimeString()}</small>`;
+            myMessageEntry.innerHTML = `<strong>[${myMessageCounter}] ${myMessageData.senderName} (${myMessageData.type.toUpperCase()}):</strong> ${myMessageData.message} <small style="float: right; color: #6c757d;">${new Date().toLocaleTimeString()}</small>`;
             myAgentMessagesArea.appendChild(myMessageEntry);
             // Scroll to the bottom
             myAgentMessagesArea.scrollTop = myAgentMessagesArea.scrollHeight;
             console.log(`My: Received message from agent (${myMessageData.type}): ${myMessageData.message}`);
+
+            // NEW: Forward this message to all other external agents
+            myOpenedAgentWindows.forEach(agentWindow => {
+                // Check if the agentWindow is still open and not the sender of the original message
+                // (This check is a bit tricky as we don't have a direct handle to the sender's window object here
+                // from the postMessage event. For simplicity in this demo, we'll just forward to all,
+                // and the agents themselves can decide if they want to display their own sent messages
+                // or filter them out if needed.)
+                if (agentWindow && !agentWindow.closed) {
+                    try {
+                        agentWindow.postMessage({
+                            type: 'mcp_forward', // New type for forwarded messages
+                            senderName: myMessageData.senderName, // Original sender
+                            message: myMessageData.message
+                        }, '*');
+                    } catch (error) {
+                        console.error('My: Error forwarding message to agent window:', error);
+                    }
+                }
+            });
         }
 
         // Add a simple Inter font link, though for full embedding it's more complex.
