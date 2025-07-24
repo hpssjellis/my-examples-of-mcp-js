@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Gemini Nano Agent</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #e6ffe6; /* Light green background for Gemini Nano */
+            color: #212529;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container { /* Renamed from .my-container for consistency with original demo */
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 700px; /* Adjusted max-width for content */
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #28a745; /* Green for Gemini Nano agent */
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #28a745; /* Green for Gemini Nano agent */
+            font-size: 1.2em;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        p {
+            margin-top: 5px;
+            font-size: 1em;
+            color: #495057;
+        }
+        .my-status-message { /* Added for agent status */
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            color: #155724;
+            font-weight: bold;
+            text-align: left;
+            word-wrap: break-word;
+        }
+
+        /* Styling for the agent's received messages box (newly added) */
+        .my-received-messages-container {
+            width: 100%;
+            max-width: 700px; /* Matches main container */
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: left;
+            margin-top: 20px;
+        }
+        .my-received-chat-options {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            justify-content: flex-end;
+            font-size: 0.9em;
+        }
+        .my-received-chat-options input[type="checkbox"] {
+            margin-right: 5px;
+            transform: scale(1.1);
+        }
+        .my-received-messages-box {
+            max-height: 250px;
+            min-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column-reverse; /* Newest messages at the bottom */
+        }
+        .my-received-message-entry {
+            word-wrap: break-word;
+            line-height: 1.4;
+            padding: 5px 0;
+            border-bottom: 1px dotted #e9ecef;
+            display: flex;
+            align-items: baseline;
+            width: 100%;
+        }
+        .my-received-message-entry:last-child {
+            border-bottom: none;
+        }
+        .my-received-message-timestamp {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        .my-received-message-sender {
+            font-weight: bold;
+            color: #0056b3; /* Consistent sender color */
+            margin-right: 5px;
+            flex-shrink: 0;
+        }
+        .my-received-message-text {
+            flex-grow: 1;
+            color: #343a40;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Existing styles from the original demo */
+        .loading {
+            color: blue;
+            font-style: italic;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        #output {
+            margin-top: 1em;
+            border: 1px solid black;
+            padding: 0.5em;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            height: 200px;
+            overflow-y: auto;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        textarea {
+            width: 98%;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            padding: 0.5em;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .metrics {
+            font-size: 0.9em;
+            color: #555;
+            margin-top: 0.5em;
+            border-top: 1px dashed #ccc;
+            padding-top: 0.5em;
+        }
+        #timerDisplay {
+            margin-top: 1em;
+            font-weight: bold;
+            color: #007bff;
+            min-height: 1.5em;
+        }
+        .copy-container {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+            margin-bottom: 20px;
+            max-width: 350px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .copy-input {
+            flex-grow: 1;
+            padding: 8px;
+            margin-right: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .copy-button {
+            padding: 8px 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .copy-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="myAgentTitle">Gemini Nano Prompt API Demo</h1>
+        <p>This agent uses Chrome's native Gemini Nano API for local LLM interactions.</p>
+        <div id="myStatus" class="my-status-message">Initializing Gemini Nano Agent...</div>
+
+        <p>
+            A starting point for a client-side, LLM in the browser, for online and offline Javascript use.<br>
+            <h3> NOT YET FOR MOBILE, DO NOT TRY YET ON MOBILE!</h3>
+            By <a href="https://github.com/hpssjellis">Jeremy Ellis</a> uses at your own risk<br>
+            Github for these gitpages at <a href="https://github.com/hpssjellis/my-examples-of-web-llm">https://github.com/hpssjellis/my-examples-of-web-llm</a><br>
+            Main Demo index at <a href="https://hpssjellis.github.io/my-examples-of-web-llm/public/index.html">https://hpssjellis.github.io/my-examples-of-web-llm/public/index.html</a>
+        </p>
+        <p>
+            This page demonstrates the core features of the Gemini Nano Prompt API (`LanguageModel` API) available in Chrome 138+.
+            Ensure you have enabled the necessary flags. Copy the link below and paste it into your Chrome address bar:
+            <input type="text" id="flagsLink" class="copy-input" value="chrome://flags" readonly>
+            <button class="copy-button" onclick="copyFlagsLink()">Copy - tab</button><br>
+            Then search for "optimization-guide-on-device-model" and then search for "gemini-nano"
+        </p>
+        <p>
+            <ul>
+                <li><code>#optimization-guide-on-device-model</code> (set to Enabled BypassPrefRequirement)</li>
+                <li><code>#prompt-api-for-gemini-nano</code> (set to Enabled)</li>
+                <li><code>#prompt-api-for-gemini-nano-multimodal-input</code>(set to Enabled) </li>
+                <li><code>#summarization-api-for-gemini-nano</code>(set to Enabled) </li>
+                <li><code>#writer-api-for-gemini-nano</code>(set to Enabled) </li>
+                <li><code>#rewriter-api-for-gemini-nano</code>(set to Enabled) </li>
+            </ul>
+            The Gemini Nano model will download the first time you use it. That will be about 4.0 GB of download and will need
+            about 20 GB saving space for the final folders.
+        </p>
+
+        <div>
+            <button onclick="checkAvailability()">Check API Availability</button>
+            <button onclick="getParams()">Get Model Parameters</button>
+            <button id="createSessionBtn" onclick="createSession()">Create Language Model Session</button>
+            <hr> <!-- Separator for prompt selection buttons -->
+            <button id="prepSimplePromptBtn" onclick="preparePrompt('simple')">Prepare Simple Prompt</button>
+            <button id="prepStreamPromptBtn" onclick="preparePrompt('streaming')">Prepare Streaming Prompt</button>
+            <button id="prepMultimodalPromptBtn" onclick="preparePrompt('multimodal')">Prepare Multimodal Prompt (Text Only)</button>
+            <button id="prepSummarizeBtn" onclick="preparePrompt('summarize')">Prepare Summarize Text</button>
+            <button id="prepWriteBtn" onclick="preparePrompt('write')">Prepare Write Content</button>
+            <button id="prepRewriteBtn" onclick="preparePrompt('rewrite')">Prepare Rewrite Text</button>
+            <hr> <!-- Separator for textarea and execute button -->
+            <h3>Edit Prompt:</h3>
+            <textarea id="promptInput" rows="5" cols="80" placeholder="Select a prompt type above to pre-fill, or type your own."></textarea>
+
+            <button id="executePromptBtn" onclick="executePrompt()" disabled>Execute Prompt</button>
+        </div>
+
+        <h2>Output:</h2>
+        <div id="timerDisplay"></div> <!-- New div for the timer -->
+        <pre id="output">No output yet. Click a button to begin.</pre>
+    </div>
+
+    <!-- Container for messages from MCP Server (newly added) -->
+    <div class="my-received-messages-container">
+        <h2>Messages from MCP Server</h2>
+        <div class="my-received-chat-options">
+            <input type="checkbox" id="myReceivedAutoScrollCheckbox" checked>
+            <label for="myReceivedAutoScrollCheckbox">Auto-scroll to top</label>
+        </div>
+        <div id="myReceivedMessagesBox" class="my-received-messages-box">
+            <!-- Messages from MCP server will appear here -->
+        </div>
+    </div>
+
+    <script>
+        // Global variable to hold the LanguageModel session
+        let languageModelSession = null;
+        // Global variable to track the current prompt mode (simple, streaming, etc.)
+        let currentPromptMode = { type: null, isStreaming: false };
+
+        // Timer variables
+        let startTime = 0;
+        let timerInterval = null;
+        let lastGeneratedText = ''; // To store the full generated text for metrics
+
+        // Get references to output and buttons
+        const outputDiv = document.getElementById('output');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const createSessionBtn = document.getElementById('createSessionBtn');
+        const promptInput = document.getElementById('promptInput');
+        const executePromptBtn = document.getElementById('executePromptBtn');
+
+        // References to the "prepare" buttons
+        const prepSimplePromptBtn = document.getElementById('prepSimplePromptBtn');
+        const prepStreamPromptBtn = document.getElementById('prepStreamPromptBtn');
+        const prepMultimodalPromptBtn = document.getElementById('prepMultimodalPromptBtn');
+        const prepSummarizeBtn = document.getElementById('prepSummarizeBtn');
+        const prepWriteBtn = document.getElementById('prepWriteBtn');
+        const prepRewriteBtn = document.getElementById('prepRewriteBtn');
+
+        // New global variables for MCP integration
+        let myAgentName = "GeminiNanoAgent"; // Default name if not provided via URL
+        let myStatusElement; // Reference to the status message div (will be initialized in onload)
+
+
+        /**
+         * Displays a message in the output area.
+         * @param {string} message The message to display.
+         * @param {string} type The type of message (e.g., 'info', 'error', 'loading').
+         * @param {boolean} append Whether to append the message or replace current content.
+         */
+        function displayOutput(message, type = 'info', append = true) {
+            const now = new Date().toLocaleTimeString();
+            let formattedMessage = `[${now}] ${message}`;
+            let content = '';
+
+            if (type === 'loading') {
+                content = `<span class="loading">${formattedMessage}</span>`;
+            } else if (type === 'error') {
+                content = `<span class="error">${formattedMessage}</span>`;
+            } else {
+                content = formattedMessage;
+            }
+
+            if (append) {
+                outputDiv.innerHTML += `\n${content}`;
+            } else {
+                outputDiv.innerHTML = content;
+            }
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+            console.log(formattedMessage);
+        }
+
+        /**
+         * Clears the main output div.
+         */
+        function clearOutput() {
+            outputDiv.innerHTML = '';
+        }
+
+        /**
+         * Updates the timer display in the output area.
+         */
+        function updateTimerDisplay() {
+            const elapsed = (Date.now() - startTime) / 1000;
+            timerDisplay.textContent = `Thinking... ${elapsed.toFixed(2)}s`;
+        }
+
+        /**
+         * Checks the availability of the LanguageModel API.
+         */
+        async function checkAvailability() {
+            clearOutput();
+            displayOutput('Checking LanguageModel API availability...', 'info', false);
+            try {
+                if (typeof LanguageModel === 'undefined') {
+                    displayOutput('LanguageModel API is not available (likely flags not enabled or Chrome version too old).', 'error', true);
+                    myStatusElement.textContent = 'Gemini Nano API not available. Please check Chrome flags/version.';
+                    return;
+                }
+                const availability = await LanguageModel.availability();
+                displayOutput(`API Availability: ${availability}`, 'info', true);
+                if (availability === 'downloadable') {
+                    displayOutput('Model is downloadable. Click "Create Language Model Session" to initiate download.', 'info', true);
+                    myStatusElement.textContent = 'Gemini Nano: Model downloadable.';
+                } else if (availability === 'available') {
+                    displayOutput('Model is available and ready for use.', 'info', true);
+                    createSessionBtn.disabled = false;
+                    myStatusElement.textContent = 'Gemini Nano: Model available. Click "Create Session".';
+                } else {
+                    displayOutput(`API Availability: ${availability}. Cannot proceed.`, 'error', true);
+                    myStatusElement.textContent = `Gemini Nano: API status: ${availability}.`;
+                }
+            } catch (error) {
+                displayOutput(`Error checking availability: ${error.message}`, 'error', true);
+                myStatusElement.textContent = `Gemini Nano: Error checking availability: ${error.message}`;
+                console.error('Error checking availability:', error);
+            }
+        }
+
+        /**
+         * Retrieves the default and maximum parameters for the LanguageModel.
+         */
+        async function getParams() {
+            clearOutput();
+            displayOutput('Fetching LanguageModel parameters...', 'info', false);
+            try {
+                if (typeof LanguageModel === 'undefined') {
+                    displayOutput('LanguageModel API is not available.', 'error', true);
+                    return;
+                }
+                const params = await LanguageModel.params();
+                displayOutput('LanguageModel Parameters:\n' + JSON.stringify(params, null, 2), 'info', true);
+            } catch (error) {
+                displayOutput(`Error fetching parameters: ${error.message}`, 'error', true);
+                console.error('Error fetching parameters:', error);
+            }
+        }
+
+        /**
+         * Creates a new LanguageModel session.
+         * This might trigger a model download if it's not already available.
+         */
+        async function createSession() {
+            clearOutput();
+            displayOutput('Creating LanguageModel session (this may take a while if model needs to download)...', 'loading', false);
+            myStatusElement.textContent = 'Gemini Nano: Creating session... (downloading if needed)';
+            createSessionBtn.disabled = true;
+
+            try {
+                if (typeof LanguageModel === 'undefined') {
+                    displayOutput('LanguageModel API is not available.', 'error', true);
+                    myStatusElement.textContent = 'Gemini Nano API not available.';
+                    createSessionBtn.disabled = false;
+                    return;
+                }
+
+                languageModelSession = await LanguageModel.create({
+                    monitor(m) {
+                        m.addEventListener("downloadprogress", (e) => {
+                            displayOutput(`Downloading model: ${((e.loaded / e.total) * 100).toFixed(2)}%`, 'loading', false);
+                            myStatusElement.textContent = `Gemini Nano: Downloading model: ${((e.loaded / e.total) * 100).toFixed(2)}%`;
+                        });
+                    }
+                });
+                displayOutput('LanguageModel session created successfully! You can now prepare and execute prompts.', 'info', true);
+                myStatusElement.textContent = 'Gemini Nano: Session ready!';
+                enableAllPreparationButtons();
+                executePromptBtn.disabled = false;
+            } catch (error) {
+                displayOutput(`Error creating session: ${error.message}`, 'error', true);
+                myStatusElement.textContent = `Gemini Nano: Error creating session: ${error.message}`;
+                console.error('Error creating session:', error);
+                createSessionBtn.disabled = false;
+            }
+        }
+
+        /**
+         * Prepares the textarea with a default prompt based on the type.
+         * @param {string} type The type of prompt to prepare ('simple', 'streaming', 'multimodal', 'summarize', 'write', 'rewrite').
+         */
+        function preparePrompt(type) {
+            let defaultText = '';
+            let isStreaming = false;
+
+            switch (type) {
+                case 'simple':
+                    defaultText = "Write a short, positive affirmation for the day.";
+                    break;
+                case 'streaming':
+                    defaultText = "Tell me a short story about a friendly robot exploring an ancient library. Make it at least 50 words.";
+                    isStreaming = true;
+                    break;
+                case 'multimodal':
+                    defaultText = "Describe a sunny day at the beach, including the sounds and smells.";
+                    break;
+                case 'summarize':
+                    defaultText = "Summarize the following text: The quick brown fox jumps over the lazy dog. This sentence is often used to demonstrate all letters of the alphabet. It's a pangram. A pangram is a sentence, phrase, or word that contains every letter of the alphabet at least once. Pangrams are used to display typefaces, test equipment, and develop skills in handwriting, calligraphy, and typing.";
+                    break;
+                case 'write':
+                    defaultText = "Write a short paragraph about the benefits of reading books.";
+                    break;
+                case 'rewrite':
+                    defaultText = "Rewrite the following sentence to sound more exciting: I went to the store and bought some apples.";
+                    break;
+                default:
+                    defaultText = "";
+                    break;
+            }
+            promptInput.value = defaultText;
+            currentPromptMode = { type: type, isStreaming: isStreaming };
+            displayOutput(`Prompt prepared for "${type}" mode. Edit text and click "Execute Prompt".`, 'info', true);
+            executePromptBtn.disabled = false;
+        }
+
+        /**
+         * Executes the prompt based on the current text in the textarea and the selected mode.
+         */
+        async function executePrompt() {
+            if (!languageModelSession) {
+                displayOutput('Please create a session first!', 'error', true);
+                myStatusElement.textContent = 'Gemini Nano: Session not created.';
+                return;
+            }
+            if (!currentPromptMode.type) {
+                displayOutput('Please prepare a prompt first by clicking one of the "Prepare" buttons.', 'error', true);
+                myStatusElement.textContent = 'Gemini Nano: No prompt prepared.';
+                return;
+            }
+
+            const promptText = promptInput.value;
+            if (!promptText.trim()) {
+                displayOutput('Prompt text cannot be empty!', 'error', true);
+                myStatusElement.textContent = 'Gemini Nano: Prompt is empty.';
+                return;
+            }
+
+            // Start the timer
+            startTime = Date.now();
+            lastGeneratedText = '';
+            timerDisplay.textContent = `Thinking... 0.00s`;
+            timerInterval = setInterval(updateTimerDisplay, 100);
+            outputDiv.innerHTML = '';
+
+            disableAllButtons();
+            myStatusElement.textContent = 'Gemini Nano: Generating response...';
+
+            try {
+                let promptContent = promptText;
+
+                if (currentPromptMode.isStreaming) {
+                    const stream = await languageModelSession.promptStreaming(promptContent);
+
+                    for await (const chunk of stream) {
+                        lastGeneratedText += chunk;
+                        outputDiv.innerHTML = lastGeneratedText;
+                        outputDiv.scrollTop = outputDiv.scrollHeight;
+                    }
+
+                    displayOutput(`Streaming Prompt Complete (${currentPromptMode.type}):\n${lastGeneratedText}`, 'info', true);
+
+                } else {
+                    let result;
+                    result = await languageModelSession.prompt(promptContent);
+
+                    displayOutput(`Prompt Result (${currentPromptMode.type}):\n${result}`, 'info', true);
+                    lastGeneratedText = result;
+                }
+
+                myStatusElement.textContent = 'Gemini Nano: Generation complete.';
+
+                // --- NEW: Send LLM's full reply to MCP server ---
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'gemini_nano_response', // Specific type for Gemini Nano responses
+                        senderName: myAgentName,
+                        message: `Gemini Nano Reply to "${promptText.substring(0, Math.min(promptText.length, 50))}...": ${lastGeneratedText.substring(0, Math.min(lastGeneratedText.length, 150))}...` // Send a summary
+                    }, '*');
+                    console.log(`My: Gemini Nano Agent sent response to MCP: ${lastGeneratedText.substring(0, Math.min(lastGeneratedText.length, 50))}...`);
+                }
+                // --- END NEW ---
+
+            } catch (error) {
+                displayOutput(`Error executing prompt: ${error.message}`, 'error', true);
+                myStatusElement.textContent = `Gemini Nano: Error during generation: ${error.message}`;
+                console.error('Error executing prompt:', error);
+                lastGeneratedText = '';
+            } finally {
+                clearInterval(timerInterval);
+                const endTime = Date.now();
+                const durationSeconds = (endTime - startTime) / 1000;
+                const charCount = lastGeneratedText.length;
+                const wordCount = lastGeneratedText.split(/\s+/).filter(word => word.length > 0).length;
+                const charsPerSecond = durationSeconds > 0 ? (charCount / durationSeconds).toFixed(2) : '0.00';
+                const wordsPerSecond = durationSeconds > 0 ? (wordCount / durationSeconds).toFixed(2) : '0.00';
+
+                timerDisplay.innerHTML =
+                    `Completed in ${durationSeconds.toFixed(2)}s<br>` +
+                    `Chars: ${charCount} (${charsPerSecond}/s)<br>` +
+                    `Words: ${wordCount} (${wordsPerSecond}/s)`;
+
+                enableAllButtons();
+            }
+        }
+
+        /**
+         * Function to copy the chrome://flags link to the clipboard and open a new tab.
+         */
+        function copyFlagsLink() {
+            const flagsInput = document.getElementById('flagsLink');
+            flagsInput.select();
+            flagsInput.setSelectionRange(0, 99999);
+
+            document.execCommand('copy');
+            window.open('about:blank', '_blank');
+            displayOutput('Copied "chrome://flags" to clipboard and opened a new tab!', 'info', true);
+        }
+
+        /**
+         * Helper function to disable all relevant buttons during API calls.
+         */
+        function disableAllButtons() {
+            createSessionBtn.disabled = true;
+            executePromptBtn.disabled = true;
+            disableAllPreparationButtons();
+        }
+
+        /**
+         * Helper function to enable all relevant buttons after API calls.
+         */
+        function enableAllButtons() {
+            if (!languageModelSession) {
+                createSessionBtn.disabled = false;
+            } else {
+                executePromptBtn.disabled = false;
+                enableAllPreparationButtons();
+            }
+        }
+
+        /**
+         * Helper function to disable all prompt preparation buttons.
+         */
+        function disableAllPreparationButtons() {
+            prepSimplePromptBtn.disabled = true;
+            prepStreamPromptBtn.disabled = true;
+            prepMultimodalPromptBtn.disabled = true;
+            prepSummarizeBtn.disabled = true;
+            prepWriteBtn.disabled = true;
+            prepRewriteBtn.disabled = true;
+        }
+
+        /**
+         * Helper function to enable all prompt preparation buttons.
+         */
+        function enableAllPreparationButtons() {
+            prepSimplePromptBtn.disabled = false;
+            prepStreamPromptBtn.disabled = false;
+            prepMultimodalPromptBtn.disabled = false;
+            prepSummarizeBtn.disabled = false;
+            prepWriteBtn.disabled = false;
+            prepRewriteBtn.disabled = false;
+        }
+
+        /**
+         * NEW FUNCTION: Appends a message to the agent's received messages box.
+         * @param {string} mySenderName - The name of the sender.
+         * @param {string} myMessageText - The text of the message.
+         */
+        function myAppendReceivedMessage(mySenderName, myMessageText) {
+            const myReceivedMessagesBox = document.getElementById('myReceivedMessagesBox');
+            const myMessageEntry = document.createElement('div');
+            myMessageEntry.className = 'my-received-message-entry';
+
+            const myTimestamp = new Date().toLocaleTimeString();
+
+            myMessageEntry.innerHTML = `
+                <span class="my-received-message-timestamp">[${myTimestamp}]</span>
+                <span class="my-received-message-sender">${mySenderName}:</span>
+                <span class="my-received-message-text">${myMessageText}</span>
+            `;
+
+            const myAutoScrollCheckbox = document.getElementById('myReceivedAutoScrollCheckbox');
+            const myIsAutoScrollEnabled = myAutoScrollCheckbox.checked;
+
+            // Check if the scrollbar is near the bottom before adding the new message
+            const myMaxScrollTop = myReceivedMessagesBox.scrollHeight - myReceivedMessagesBox.clientHeight;
+            const myIsCurrentlyAtVisualTop = myReceivedMessagesBox.scrollTop >= (myMaxScrollTop - 5);
+
+            myReceivedMessagesBox.appendChild(myMessageEntry);
+
+            // Only scroll if auto-scroll is enabled and the user was already at the bottom
+            if (myIsAutoScrollEnabled && myIsCurrentlyAtVisualTop) {
+                myReceivedMessagesBox.scrollTop = myReceivedMessagesBox.scrollHeight - myReceivedMessagesBox.clientHeight;
+            }
+        }
+
+        /**
+         * NEW FUNCTION: Handles incoming messages from the MCP server.
+         * @param {MessageEvent} myEvent - The message event object.
+         */
+        window.onmessage = async function(myEvent) {
+            // Ensure the message is from a trusted origin in a real application
+            if (myEvent.data && typeof myEvent.data === 'object' && myEvent.data.senderName && myEvent.data.message) {
+                myAppendReceivedMessage(myEvent.data.senderName, myEvent.data.message);
+            } else {
+                console.warn('My: Gemini Nano Agent received an unrecognized message format from MCP:', myEvent.data);
+            }
+        };
+
+        // Initial check and setup on page load
+        window.onload = () => {
+            myStatusElement = document.getElementById('myStatus'); // Initialize status element here
+            // Get agent name from URL parameter
+            const myUrlParams = new URLSearchParams(window.location.search);
+            const myNameFromUrl = myUrlParams.get('agentName');
+            if (myNameFromUrl) {
+                myAgentName = decodeURIComponent(myNameFromUrl);
+                document.getElementById('myAgentTitle').textContent = `My Gemini Nano Agent (${myAgentName})`;
+            }
+
+            if (window.opener) {
+                myStatusElement.textContent = `Gemini Nano Agent "${myAgentName}" ready. Check API availability.`;
+                console.log('My: Gemini Nano Agent running. Opener window detected.');
+            } else {
+                myStatusElement.textContent = 'Gemini Nano Agent running in standalone mode (no opener detected).';
+                console.warn('My: Gemini Nano Agent opened directly, not via MCP server. Communication to opener will not work.');
+            }
+
+            checkAvailability();
+            disableAllPreparationButtons();
+            executePromptBtn.disabled = true;
+
+            // Add Inter font link
+            const myFontLink = document.createElement('link');
+            myFontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap';
+            myFontLink.rel = 'stylesheet';
+            document.head.appendChild(myFontLink);
+        };
+    </script>
+</body>
+</html>
