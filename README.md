@@ -12,3 +12,13 @@ https://hpssjellis.github.io/my-examples-of-mcp-js/public/index.html
 
 These examples are going to use client-side browser MCP server with MCP client but it will be much more useful to make a NodeJS websocket
 server for the mcp server and client to chat with. That way you are not stuck with single web instance. The clients coud be on several different computers
+
+
+
+Note 2025 webMCP is a different style and it is at 
+
+https://github.com/hpssjellis/webmcp
+
+Demo for it at 
+
+https://hpssjellis.github.io/webmcp/public/index.html
