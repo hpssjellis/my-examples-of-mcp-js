@@ -262,7 +262,7 @@
                         if (myQueryText.includes('tell a joke')) {
                             this.mySendMessageToClient(mySendingClientInstance, 'AGENT_THOUGHT', { thought: 'Time for a laugh... fetching a joke!' });
                             try {
-                                const response = await fetch('https://api.chucknorris.io/jokes/random');
+                                const response = await fetch('https://icanhazdadjoke.com/#google_vignette');
                                 const jokeData = await response.json();
                                 console.log('Chuck Norris Joke API Raw JSON:', jokeData);
                                 const rawJson = JSON.stringify(jokeData, null, 2);
